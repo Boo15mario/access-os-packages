@@ -54,7 +54,7 @@ jobs:
               pacman-key --init
               pacman-key --populate archlinux
               # Enable multilib (needed for packages with lib32 deps, e.g. wine-stable)
-              sed -i '/^\\s*#\\s*\\[multilib\\]\\s*$/,/^\\s*#\\s*Include\\s*=\\s*\\/etc\\/pacman\\.d\\/mirrorlist\\s*$/ s/^\\s*#\\s*//' /etc/pacman.conf
+              sed -i "/^\\s*#\\s*\\[multilib\\]\\s*$/,/^\\s*#\\s*Include\\s*=\\s*\\/etc\\/pacman\\.d\\/mirrorlist\\s*$/ s/^\\s*#\\s*//" /etc/pacman.conf
               pacman -Syu --noconfirm --needed archlinux-keyring base-devel git curl jq sudo
               env \
                 GITHUB_REPOSITORY_OWNER="${GITHUB_REPOSITORY_OWNER}" \
@@ -78,7 +78,7 @@ jobs:
               pacman-key --init
               pacman-key --populate archlinux
               # Enable multilib (needed for packages with lib32 deps, e.g. wine-stable)
-              sed -i '/^\\s*#\\s*\\[multilib\\]\\s*$/,/^\\s*#\\s*Include\\s*=\\s*\\/etc\\/pacman\\.d\\/mirrorlist\\s*$/ s/^\\s*#\\s*//' /etc/pacman.conf
+              sed -i "/^\\s*#\\s*\\[multilib\\]\\s*$/,/^\\s*#\\s*Include\\s*=\\s*\\/etc\\/pacman\\.d\\/mirrorlist\\s*$/ s/^\\s*#\\s*//" /etc/pacman.conf
               pacman -Syu --noconfirm --needed archlinux-keyring base-devel git curl jq sudo pacman-contrib
               useradd -m builder
               echo "builder ALL=(ALL) NOPASSWD: ALL" > /etc/sudoers.d/builder
