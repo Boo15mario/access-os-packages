@@ -2,6 +2,5 @@
 #
 # Lines starting with # and blank lines are ignored.
 neofetch
-mkinitcpio-firmware
+# mkinitcpio-firmware # TODO: requires AUR firmware deps (needs AUR dep resolver)
 reiserfsprogs
-
