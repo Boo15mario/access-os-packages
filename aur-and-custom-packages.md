@@ -26,3 +26,4 @@ Packages that were in `packages.x86_64` but are **not in the official Arch repos
 |---------|-------------|-------------|
 | `p7zip` | `7zip` (official `extra` repo) | 7-Zip file archiver. `p7zip` was dropped from official repos; the upstream `7zip` package is now in `extra`. |
 | `rpi-imager-bin` | `rpi-imager` (official `extra` repo) | Raspberry Pi Imager. `rpi-imager-bin` is not in AUR; use the official `rpi-imager` package. |
+| `python-vdf` | `python-vdf` (official `extra` repo) | Valve Data Format Python library. It is in official repos (not AUR), so it should not be in the AUR build list. |

@@ -28,7 +28,6 @@ python3-xcpf
 python-inputs
 python-pdf2image
 python-ufonormalizer
-python-vdf
 printer-support
 official-gamecube-controller-adapter-rules
 oldschool-pc-fonts
