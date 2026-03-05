@@ -68,8 +68,25 @@ if [[ "${DRY_RUN}" == "1" ]]; then
   exit 0
 fi
 
+clean_dir_contents() {
+  local dir="$1"
+  [[ -n "${dir}" ]] || die "clean_dir_contents: empty path"
+
+  mkdir -p -- "${dir}"
+
+  local resolved_dir resolved_root
+  resolved_dir="$(realpath -- "${dir}")"
+  resolved_root="$(realpath -- "${REPO_ROOT}")"
+  if [[ "${resolved_dir}" == "/" || "${resolved_dir}" == "${resolved_root}" ]]; then
+    die "refusing to clean unsafe dir: ${resolved_dir}"
+  fi
+
+  find "${resolved_dir}" -mindepth 1 -maxdepth 1 -exec rm -rf -- {} +
+}
+
 if [[ "${CLEAN_BEFORE_BUILD}" == "1" ]]; then
-  rm -rf -- "${DIST_DIR}" "${SITE_DIR}"
+  clean_dir_contents "${DIST_DIR}"
+  clean_dir_contents "${SITE_DIR}"
 fi
 
 mkdir -p "${DIST_DIR}/${CORE_REPO}/${ARCH}" "${DIST_DIR}/${EXTRA_REPO}/${ARCH}"
@@ -189,4 +206,3 @@ create_repo_db "${EXTRA_REPO}" "${DIST_DIR}/${EXTRA_REPO}/${ARCH}" "${SITE_DIR}/
 echo "Done."
 echo "  dist/: ${DIST_DIR}"
 echo "  site/: ${SITE_DIR}"
-
