@@ -13,7 +13,6 @@ neofetch
 reiserfsprogs
 pacman-cleanup-hook
 samba-support
-rpi-imager-bin
 ttf-mac-fonts
 ttf-ms-fonts
 ttf-tamil

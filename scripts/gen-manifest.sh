@@ -22,6 +22,8 @@ require_cmd curl
 
 core_packages_json='{}'
 extra_packages_json='{}'
+aur_missing=()
+aur_query_failed=()
 
 srcinfo_from_dir() {
   local pkg_dir="$1"
@@ -89,18 +91,46 @@ if [[ -f "${EXTRA_LIST_FILE}" ]]; then
     pkg="${pkg%"${pkg##*[![:space:]]}"}"
     [[ -z "${pkg}" ]] && continue
 
-    aur_json="$(curl -fsSLG --data-urlencode "v=5" --data-urlencode "type=info" --data-urlencode "arg[]=${pkg}" "https://aur.archlinux.org/rpc/" || true)"
+    aur_json="$(
+      curl -fsSLG \
+        --retry 3 \
+        --retry-all-errors \
+        --connect-timeout 10 \
+        --max-time 30 \
+        --data-urlencode "v=5" \
+        --data-urlencode "type=info" \
+        --data-urlencode "arg[]=${pkg}" \
+        "https://aur.archlinux.org/rpc/" || true
+    )"
     if [[ -z "${aur_json}" ]]; then
-      die "failed to query AUR for ${pkg}"
+      aur_query_failed+=("${pkg}")
+      continue
     fi
 
     ver="$(jq -r '.results[0].Version // empty' <<<"${aur_json}")"
     if [[ -z "${ver}" || "${ver}" == "null" ]]; then
-      die "AUR package not found or missing version: ${pkg}"
+      aur_missing+=("${pkg}")
+      continue
     fi
 
     extra_packages_json="$(jq -c --arg name "${pkg}" --arg ver "${ver}" '. + {($name): $ver}' <<<"${extra_packages_json}")"
   done <"${EXTRA_LIST_FILE}"
+fi
+
+if [[ "${#aur_query_failed[@]}" -gt 0 ]]; then
+  {
+    echo "Error: failed to query AUR for:"
+    printf '  - %s\n' "${aur_query_failed[@]}"
+  } >&2
+  exit 1
+fi
+
+if [[ "${#aur_missing[@]}" -gt 0 ]]; then
+  {
+    echo "Error: AUR package(s) not found or missing version:"
+    printf '  - %s\n' "${aur_missing[@]}"
+  } >&2
+  exit 1
 fi
 
 jq -n \
