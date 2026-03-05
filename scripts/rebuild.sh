@@ -257,11 +257,10 @@ create_repo_db() {
       tar -czf "${repo}.files.tar.gz" --files-from /dev/null
     fi
 
-    cp -f "${repo}.db.tar.gz" "${repo}.db"
-    cp -f "${repo}.files.tar.gz" "${repo}.files"
-
-    cp -f "${repo}.db" "${pages_dir}/${repo}.db"
-    cp -f "${repo}.files" "${pages_dir}/${repo}.files"
+    # GitHub Pages doesn't preserve symlinks, so publish real files named
+    # <repo>.db and <repo>.files (containing the tarball payloads).
+    cp -f "${repo}.db.tar.gz" "${pages_dir}/${repo}.db"
+    cp -f "${repo}.files.tar.gz" "${pages_dir}/${repo}.files"
   )
 }
 
