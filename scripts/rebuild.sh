@@ -178,6 +178,8 @@ build_extra() {
   makepkg_with_pgp_retry() {
     local pkg_dir="$1"
     local pkg_name="$2"
+    shift 2
+    local -a makepkg_flags=("$@")
     local max_attempts=2
     local attempt=1
 
@@ -186,7 +188,7 @@ build_extra() {
       log_file="$(mktemp "${work_dir%/}/makepkg.${pkg_name}.XXXXXX.log")"
 
       set +e
-      (cd "${pkg_dir}" && PKGDEST="${out_dir}" makepkg --syncdeps --noconfirm --clean --cleanbuild --needed) 2>&1 | tee "${log_file}"
+      (cd "${pkg_dir}" && PKGDEST="${out_dir}" makepkg "${makepkg_flags[@]}") 2>&1 | tee "${log_file}"
       rc="${PIPESTATUS[0]}"
       set -e
 
@@ -227,7 +229,11 @@ build_extra() {
     echo "  - ${pkg}"
     git clone --depth 1 "https://aur.archlinux.org/${pkg}.git" "${aur_root}/${pkg}"
     import_pgp_keys "${aur_root}/${pkg}"
-    makepkg_with_pgp_retry "${aur_root}/${pkg}" "${pkg}"
+    local -a makepkg_flags=(--syncdeps --noconfirm --clean --cleanbuild --needed)
+    if [[ "${pkg}" == "mkinitcpio-firmware" ]]; then
+      makepkg_flags=(--nodeps --noconfirm --clean --cleanbuild --needed)
+    fi
+    makepkg_with_pgp_retry "${aur_root}/${pkg}" "${pkg}" "${makepkg_flags[@]}"
   done
 }
 

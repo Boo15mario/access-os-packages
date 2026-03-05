@@ -1,6 +1,13 @@
 # AUR packages for access-os-extra (one per line).
 #
 # Lines starting with # and blank lines are ignored.
+
+# Firmware deps for mkinitcpio-firmware (AUR)
+aic94xx-firmware
+ast-firmware
+upd72020x-fw
+wd719x-firmware
+mkinitcpio-firmware
+
 neofetch
-# mkinitcpio-firmware # TODO: requires AUR firmware deps (needs AUR dep resolver)
 reiserfsprogs
