@@ -146,10 +146,31 @@ build_extra() {
     return 0
   fi
 
+  import_pgp_keys() {
+    local pkg_dir="$1"
+    local -a keys=()
+
+    if [[ -f "${pkg_dir}/.SRCINFO" ]]; then
+      mapfile -t keys < <(awk -F' = ' '$1 == "validpgpkeys" {print $2}' "${pkg_dir}/.SRCINFO" | sed 's/[[:space:]]//g' | awk 'NF')
+    fi
+
+    if [[ "${#keys[@]}" -eq 0 ]]; then
+      return 0
+    fi
+
+    echo "    importing PGP key(s) for ${pkg_dir##*/}: ${keys[*]}"
+    for key in "${keys[@]}"; do
+      gpg --batch --keyserver hkps://keyserver.ubuntu.com --recv-keys "${key}" >/dev/null 2>&1 ||
+        gpg --batch --keyserver hkps://keys.openpgp.org --recv-keys "${key}" >/dev/null 2>&1 ||
+        echo "Warning: failed to import PGP key ${key}; build may fail" >&2
+    done
+  }
+
   echo "Building ${#pkgs[@]} AUR package(s)..."
   for pkg in "${pkgs[@]}"; do
     echo "  - ${pkg}"
     git clone --depth 1 "https://aur.archlinux.org/${pkg}.git" "${aur_root}/${pkg}"
+    import_pgp_keys "${aur_root}/${pkg}"
     (cd "${aur_root}/${pkg}" && PKGDEST="${out_dir}" makepkg --syncdeps --noconfirm --clean --cleanbuild --needed)
   done
 }
