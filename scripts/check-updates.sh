@@ -56,6 +56,11 @@ if [[ "${remote_hash}" != "${desired_hash}" ]]; then
   rebuild_required="true"
 fi
 
+if [[ "${FORCE_REBUILD:-}" == "true" || "${FORCE_REBUILD:-}" == "1" ]]; then
+  echo "Force rebuild requested via FORCE_REBUILD=${FORCE_REBUILD}"
+  rebuild_required="true"
+fi
+
 echo "Pages base URL: ${base_url}"
 echo "Remote manifest: ${remote_url}"
 echo "Rebuild required: ${rebuild_required}"

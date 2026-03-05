@@ -1,7 +1,13 @@
 name: Build pacman repos
 
 on:
-  workflow_dispatch: {}
+  workflow_dispatch:
+    inputs:
+      force_rebuild:
+        description: "Force rebuild even if manifest unchanged"
+        required: false
+        type: boolean
+        default: false
   schedule:
     - cron: "0 6 * * *" # daily at 06:00 UTC
   push:
@@ -32,11 +38,14 @@ jobs:
 
       - name: Check if rebuild is required
         id: check
+        env:
+          FORCE_REBUILD: ${{ github.event.inputs.force_rebuild }}
         run: |
           set -euo pipefail
           docker run --rm \
             -e GITHUB_REPOSITORY_OWNER \
             -e GITHUB_REPOSITORY \
+            -e FORCE_REBUILD \
             -v "$GITHUB_WORKSPACE:/work" \
             -w /work \
             archlinux:latest \

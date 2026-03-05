@@ -248,6 +248,19 @@ create_repo_db() {
     cd "${repo_dir}"
 
     shopt -s nullglob
+    for f in *.pkg.tar.*; do
+      [[ "${f}" == *.sig ]] && continue
+      if [[ "${f}" == *:* ]]; then
+        new="${f//:/.}"
+        if [[ -e "${new}" ]]; then
+          die "cannot rename ${f} -> ${new}: destination already exists"
+        fi
+        mv -f -- "${f}" "${new}"
+      fi
+    done
+    shopt -u nullglob
+
+    shopt -s nullglob
     local -a pkgs=()
     for f in *.pkg.tar.*; do
       [[ "${f}" == *.sig ]] && continue
