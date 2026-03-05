@@ -52,13 +52,13 @@ Note: GitHub Pages deployment artifacts must not contain symlinks; after `repo-a
 Pacman consumers can use:
 ```
 [access-os-core]
-Server = https://github.com/<owner>/<repo>/releases/download/$repo-$arch/
 Server = https://<owner>.github.io/<repo>/$repo/os/$arch
+Server = https://github.com/<owner>/<repo>/releases/download/$repo-$arch/
 SigLevel = Optional TrustAll
 
 [access-os-extra]
-Server = https://github.com/<owner>/<repo>/releases/download/$repo-$arch/
 Server = https://<owner>.github.io/<repo>/$repo/os/$arch
+Server = https://github.com/<owner>/<repo>/releases/download/$repo-$arch/
 SigLevel = Optional TrustAll
 ```
 

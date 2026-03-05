@@ -12,13 +12,13 @@ In `pacman.conf`:
 ```
 [access-os-core]
 SigLevel = Optional TrustAll
-Server = https://github.com/boo15mario/access-os-packages/releases/download/$repo-$arch/
 Server = https://boo15mario.github.io/access-os-packages/$repo/os/$arch
+Server = https://github.com/boo15mario/access-os-packages/releases/download/$repo-$arch/
 
 [access-os-extra]
 SigLevel = Optional TrustAll
-Server = https://github.com/boo15mario/access-os-packages/releases/download/$repo-$arch/
 Server = https://boo15mario.github.io/access-os-packages/$repo/os/$arch
+Server = https://github.com/boo15mario/access-os-packages/releases/download/$repo-$arch/
 ```
 
 Notes:
@@ -40,4 +40,3 @@ GitHub Actions runs on a schedule and:
 - Computes the desired `manifest.json` (core PKGBUILDs + AUR versions).
 - Compares it to the published Pages `manifest.json`.
 - If anything changed, rebuilds everything, uploads packages to Releases, and updates Pages DBs.
-
