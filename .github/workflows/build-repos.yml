@@ -110,6 +110,8 @@ jobs:
       - name: Configure Pages
         if: steps.check.outputs.rebuild_required == 'true'
         uses: actions/configure-pages@v5
+        with:
+          enablement: true
 
       - name: Upload Pages artifact
         if: steps.check.outputs.rebuild_required == 'true'
