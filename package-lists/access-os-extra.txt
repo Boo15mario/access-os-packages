@@ -1,0 +1,7 @@
+# AUR packages for access-os-extra (one per line).
+#
+# Lines starting with # and blank lines are ignored.
+neofetch
+mkinitcpio-firmware
+reiserfsprogs
+

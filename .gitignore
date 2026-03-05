@@ -1,0 +1,19 @@
+# Build outputs
+/dist/
+/site/
+/work/
+
+# Arch packaging
+*.pkg.tar.*
+*.pkg.tar.*.sig
+
+# Repo databases
+*.db
+*.files
+*.db.tar.*
+*.files.tar.*
+
+# Temporary files
+/.tmp-*
+.DS_Store
+

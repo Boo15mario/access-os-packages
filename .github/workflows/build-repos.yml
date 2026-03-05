@@ -1,0 +1,128 @@
+name: Build pacman repos
+
+on:
+  workflow_dispatch: {}
+  schedule:
+    - cron: "0 6 * * *" # daily at 06:00 UTC
+  push:
+    paths:
+      - ".github/workflows/build-repos.yml"
+      - "scripts/**"
+      - "packages/**"
+      - "package-lists/**"
+      - "aur-and-custom-packages.md"
+
+permissions:
+  contents: write
+  pages: write
+  id-token: write
+
+concurrency:
+  group: "pages"
+  cancel-in-progress: false
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    outputs:
+      rebuild_required: ${{ steps.check.outputs.rebuild_required }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Check if rebuild is required
+        id: check
+        run: |
+          set -euo pipefail
+          docker run --rm \
+            -e GITHUB_REPOSITORY_OWNER \
+            -e GITHUB_REPOSITORY \
+            -v "$GITHUB_WORKSPACE:/work" \
+            -w /work \
+            archlinux:latest \
+            bash -lc '
+              set -euo pipefail
+              pacman -Syu --noconfirm --needed base-devel git curl jq sudo
+              useradd -m builder
+              echo "builder ALL=(ALL) NOPASSWD: ALL" > /etc/sudoers.d/builder
+              chown -R builder:builder /work
+              sudo -u builder env \
+                GITHUB_REPOSITORY_OWNER="${GITHUB_REPOSITORY_OWNER}" \
+                GITHUB_REPOSITORY="${GITHUB_REPOSITORY}" \
+                GITHUB_OUTPUT=/work/.gh-out \
+                ./scripts/check-updates.sh
+            '
+          cat .gh-out >> "$GITHUB_OUTPUT"
+          rm -f .gh-out
+
+      - name: Build packages and stage site/
+        if: steps.check.outputs.rebuild_required == 'true'
+        run: |
+          set -euo pipefail
+          docker run --rm \
+            -v "$GITHUB_WORKSPACE:/work" \
+            -w /work \
+            archlinux:latest \
+            bash -lc '
+              set -euo pipefail
+              pacman -Syu --noconfirm --needed base-devel git curl jq sudo pacman-contrib
+              useradd -m builder
+              echo "builder ALL=(ALL) NOPASSWD: ALL" > /etc/sudoers.d/builder
+              chown -R builder:builder /work
+              sudo -u builder bash -lc "./scripts/rebuild.sh"
+            '
+
+      - name: Upload packages to GitHub Releases
+        if: steps.check.outputs.rebuild_required == 'true'
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          arch="x86_64"
+          for repo in access-os-core access-os-extra; do
+            tag="${repo}-${arch}"
+            if gh release view "${tag}" >/dev/null 2>&1; then
+              echo "Release exists: ${tag}"
+            else
+              gh release create "${tag}" \
+                --title "${tag}" \
+                --notes "Automated package assets for ${repo} (${arch})."
+            fi
+
+            files=()
+            shopt -s nullglob
+            for f in "dist/${repo}/${arch}/"*.pkg.tar.*; do
+              [[ "${f}" == *.sig ]] && continue
+              files+=("${f}")
+            done
+            shopt -u nullglob
+
+            if [[ "${#files[@]}" -eq 0 ]]; then
+              echo "No package files for ${repo}; skipping upload."
+              continue
+            fi
+
+            gh release upload "${tag}" "${files[@]}" --clobber
+          done
+
+      - name: Configure Pages
+        if: steps.check.outputs.rebuild_required == 'true'
+        uses: actions/configure-pages@v5
+
+      - name: Upload Pages artifact
+        if: steps.check.outputs.rebuild_required == 'true'
+        uses: actions/upload-pages-artifact@v3
+        with:
+          path: site
+
+  deploy:
+    needs: build
+    if: needs.build.outputs.rebuild_required == 'true'
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - name: Deploy to GitHub Pages
+        id: deployment
+        uses: actions/deploy-pages@v4
