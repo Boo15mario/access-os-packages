@@ -40,3 +40,8 @@ GitHub Actions runs on a schedule and:
 - Computes the desired `manifest.json` (core PKGBUILDs + AUR versions).
 - Compares it to the published Pages `manifest.json`.
 - If anything changed, rebuilds everything, uploads packages to Releases, and updates Pages DBs.
+
+## One-time GitHub setup
+
+1. Repo **Settings → Pages → Build and deployment**: set **Source** to **GitHub Actions**.
+2. Repo **Settings → Actions → General → Workflow permissions**: set to **Read and write**.
