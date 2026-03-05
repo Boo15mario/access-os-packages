@@ -12,13 +12,16 @@ Packages that were in `packages.x86_64` but are **not in the official Arch repos
 
 | Package | Description |
 |---------|-------------|
+| `aic94xx-firmware` | Firmware for the Adaptec SAS AIC94xx driver. AUR: `aic94xx-firmware` |
+| `ast-firmware` | Aspeed VGA firmware (IPMI). AUR: `ast-firmware` |
 | `neofetch` | CLI system information tool. Removed from official repos (upstream archived). AUR: `neofetch` |
-| `mkinitcpio-firmware` | Optional firmware for the default linux kernel to suppress 'Possibly missing firmware' warnings. AUR: `mkinitcpio-firmware` |
+| `mkinitcpio-firmware` | Optional firmware bundle (via deps) for the default linux kernel to suppress 'Possibly missing firmware' warnings. AUR: `mkinitcpio-firmware` |
 | `reiserfsprogs` | Reiserfs utilities. Removed from official repos. AUR: `reiserfsprogs` |
+| `upd72020x-fw` | Renesas uPD720201 / uPD720202 USB 3.0 chipset firmware. AUR: `upd72020x-fw` |
+| `wd719x-firmware` | Firmware for Western Digital WD719x SCSI cards. AUR: `wd719x-firmware` |
 
 ## Replaced Package
 
 | Package | Replacement | Description |
 |---------|-------------|-------------|
 | `p7zip` | `7zip` (official `extra` repo) | 7-Zip file archiver. `p7zip` was dropped from official repos; the upstream `7zip` package is now in `extra`. |
-
