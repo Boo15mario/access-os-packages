@@ -78,7 +78,7 @@ if [[ "${rebuild_required}" == "true" ]]; then
     | (((($o|keys) + ($n|keys)) | unique | sort)[])
     | . as $p
     | select(($o[$p] // "-") != ($n[$p] // "-"))
-    | "\($r)\t\($p)\t\($o[$p] // \"-\") -> \($n[$p] // \"-\")"
+    | "\($r)\t\($p)\t\($o[$p] // "-") -> \($n[$p] // "-")"
     ' | sed 's/^/  - /'
 fi
 
@@ -88,4 +88,3 @@ if [[ -n "${GITHUB_OUTPUT:-}" ]]; then
     echo "pages_base_url=${base_url}"
   } >>"${GITHUB_OUTPUT}"
 fi
-
