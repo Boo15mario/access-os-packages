@@ -146,6 +146,13 @@ build_extra() {
     return 0
   fi
 
+  recv_pgp_key() {
+    local key="$1"
+    gpg --batch --keyserver hkps://keyserver.ubuntu.com --recv-keys "${key}" >/dev/null 2>&1 && return 0
+    gpg --batch --keyserver hkps://keys.openpgp.org --recv-keys "${key}" >/dev/null 2>&1 && return 0
+    return 1
+  }
+
   import_pgp_keys() {
     local pkg_dir="$1"
     local -a keys=()
@@ -158,11 +165,60 @@ build_extra() {
       return 0
     fi
 
-    echo "    importing PGP key(s) for ${pkg_dir##*/}: ${keys[*]}"
+    echo "    importing PGP key(s) from .SRCINFO: ${keys[*]}"
     for key in "${keys[@]}"; do
-      gpg --batch --keyserver hkps://keyserver.ubuntu.com --recv-keys "${key}" >/dev/null 2>&1 ||
-        gpg --batch --keyserver hkps://keys.openpgp.org --recv-keys "${key}" >/dev/null 2>&1 ||
+      if recv_pgp_key "${key}"; then
+        echo "    imported PGP key: ${key}"
+      else
         echo "Warning: failed to import PGP key ${key}; build may fail" >&2
+      fi
+    done
+  }
+
+  makepkg_with_pgp_retry() {
+    local pkg_dir="$1"
+    local pkg_name="$2"
+    local max_attempts=2
+    local attempt=1
+
+    while true; do
+      local log_file rc
+      log_file="$(mktemp "${work_dir%/}/makepkg.${pkg_name}.XXXXXX.log")"
+
+      set +e
+      (cd "${pkg_dir}" && PKGDEST="${out_dir}" makepkg --syncdeps --noconfirm --clean --cleanbuild --needed) 2>&1 | tee "${log_file}"
+      rc="${PIPESTATUS[0]}"
+      set -e
+
+      if [[ "${rc}" -eq 0 ]]; then
+        rm -f -- "${log_file}"
+        return 0
+      fi
+
+      local -a missing_keys=()
+      mapfile -t missing_keys < <(grep -ioE 'unknown public key [0-9a-f]+' "${log_file}" | awk '{print $4}' | sort -u)
+      rm -f -- "${log_file}"
+
+      if [[ "${#missing_keys[@]}" -eq 0 || "${attempt}" -ge "${max_attempts}" ]]; then
+        return "${rc}"
+      fi
+
+      echo "    makepkg failed due to missing PGP key(s): ${missing_keys[*]}"
+      local imported_any=0
+      for key in "${missing_keys[@]}"; do
+        if recv_pgp_key "${key}"; then
+          echo "    imported PGP key: ${key}"
+          imported_any=1
+        else
+          echo "Warning: failed to import PGP key ${key}" >&2
+        fi
+      done
+
+      if [[ "${imported_any}" -ne 1 ]]; then
+        return "${rc}"
+      fi
+
+      attempt="$((attempt + 1))"
     done
   }
 
@@ -171,7 +227,7 @@ build_extra() {
     echo "  - ${pkg}"
     git clone --depth 1 "https://aur.archlinux.org/${pkg}.git" "${aur_root}/${pkg}"
     import_pgp_keys "${aur_root}/${pkg}"
-    (cd "${aur_root}/${pkg}" && PKGDEST="${out_dir}" makepkg --syncdeps --noconfirm --clean --cleanbuild --needed)
+    makepkg_with_pgp_retry "${aur_root}/${pkg}" "${pkg}"
   done
 }
 
