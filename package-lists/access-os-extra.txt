@@ -42,11 +42,11 @@ android-sdk-platform-tools
 android-studio
 
 # System76 (AUR)
-system76-dkms
+system76-dkms-git
 system76-acpi-dkms
 system76-io-dkms
 system76-oled
-system76-firmware
+system76-firmware-daemon-git
 firmware-manager
 system76-power
 gnome-shell-extension-system76-power-git
