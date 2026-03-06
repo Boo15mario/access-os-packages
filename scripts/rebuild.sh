@@ -241,20 +241,41 @@ build_extra() {
   }
 
   echo "Building ${#pkgs[@]} AUR package(s)..."
+  local pkgbuilds_save_dir="${REPO_ROOT}/pkgbuilds"
+  mkdir -p "${pkgbuilds_save_dir}"
   for pkg in "${pkgs[@]}"; do
     echo "  - ${pkg}"
-    git clone --depth 1 "https://aur.archlinux.org/${pkg}.git" "${aur_root}/${pkg}"
-    import_pgp_keys "${aur_root}/${pkg}"
+    local pkg_dir="${aur_root}/${pkg}"
+
+    # Try to clone from AUR; fall back to a saved PKGBUILD if the package was removed
+    if ! git clone --depth 1 "https://aur.archlinux.org/${pkg}.git" "${pkg_dir}"; then
+      echo "  Warning: failed to clone ${pkg} from AUR; package may have been removed" >&2
+      if [[ -d "${pkgbuilds_save_dir}/${pkg}" && -f "${pkgbuilds_save_dir}/${pkg}/PKGBUILD" ]]; then
+        echo "    Using saved PKGBUILD from pkgbuilds/${pkg}" >&2
+        mkdir -p "${pkg_dir}"
+        cp -r "${pkgbuilds_save_dir}/${pkg}/." "${pkg_dir}/"
+      else
+        echo "    No saved PKGBUILD for ${pkg}; skipping" >&2
+        continue
+      fi
+    fi
+
+    import_pgp_keys "${pkg_dir}"
     local -a makepkg_flags=(--syncdeps --noconfirm --clean --cleanbuild --needed)
     if [[ "${pkg}" == "mkinitcpio-firmware" ]]; then
       makepkg_flags=(--nodeps --noconfirm --clean --cleanbuild --needed)
     fi
-    makepkg_with_pgp_retry "${aur_root}/${pkg}" "${pkg}" "${makepkg_flags[@]}"
+    makepkg_with_pgp_retry "${pkg_dir}" "${pkg}" "${makepkg_flags[@]}"
+
+    # Save PKGBUILD (and .SRCINFO) after a successful build
+    mkdir -p "${pkgbuilds_save_dir}/${pkg}"
+    cp -f "${pkg_dir}/PKGBUILD" "${pkgbuilds_save_dir}/${pkg}/PKGBUILD"
+    [[ -f "${pkg_dir}/.SRCINFO" ]] && cp -f "${pkg_dir}/.SRCINFO" "${pkgbuilds_save_dir}/${pkg}/.SRCINFO"
 
     if should_install_after_build "${pkg}"; then
       echo "    installing built package into build environment: ${pkg}"
       local -a built_files=()
-      mapfile -t built_files < <(cd "${aur_root}/${pkg}" && PKGDEST="${out_dir}" makepkg --packagelist)
+      mapfile -t built_files < <(cd "${pkg_dir}" && PKGDEST="${out_dir}" makepkg --packagelist)
       if [[ "${#built_files[@]}" -eq 0 ]]; then
         die "failed to determine built package file(s) for ${pkg}"
       fi
