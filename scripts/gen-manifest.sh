@@ -109,7 +109,16 @@ if [[ -f "${EXTRA_LIST_FILE}" ]]; then
 
     ver="$(jq -r '.results[0].Version // empty' <<<"${aur_json}")"
     if [[ -z "${ver}" || "${ver}" == "null" ]]; then
-      aur_missing+=("${pkg}")
+      # Package not found in AUR - check for a saved PKGBUILD fallback
+      local_pkgbuild_dir="${REPO_ROOT}/pkgbuilds/${pkg}"
+      if [[ -d "${local_pkgbuild_dir}" && -f "${local_pkgbuild_dir}/PKGBUILD" ]]; then
+        echo "Warning: ${pkg} not found in AUR; falling back to saved PKGBUILD in pkgbuilds/${pkg}" >&2
+        pkgbuild_srcinfo="$(srcinfo_from_dir "${local_pkgbuild_dir}")"
+        add_srcinfo_packages extra_packages_json "${pkgbuild_srcinfo}"
+      else
+        echo "Warning: ${pkg} not found in AUR and no saved PKGBUILD; skipping" >&2
+        aur_missing+=("${pkg}")
+      fi
       continue
     fi
 
@@ -127,10 +136,9 @@ fi
 
 if [[ "${#aur_missing[@]}" -gt 0 ]]; then
   {
-    echo "Error: AUR package(s) not found or missing version:"
+    echo "Warning: AUR package(s) not found and no saved PKGBUILD; skipped:"
     printf '  - %s\n' "${aur_missing[@]}"
   } >&2
-  exit 1
 fi
 
 jq -n \
