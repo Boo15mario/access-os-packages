@@ -36,3 +36,18 @@ noto-color-emoji-fontconfig
 minecraft-launcher
 fenrir-git
 downgrade
+
+# Android (AUR)
+android-sdk-platform-tools
+android-studio
+
+# System76 (AUR)
+system76-dkms
+system76-acpi-dkms
+system76-io-dkms
+system76-oled
+system76-firmware
+firmware-manager
+system76-power
+gnome-shell-extension-system76-power-git
+system76-driver
