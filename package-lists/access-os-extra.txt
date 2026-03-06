@@ -19,6 +19,7 @@ ttf-tamil
 zfs-dkms
 zfs-utils
 paru
+lib32-unixodbc
 wine-stable
 update-grub
 quickemu

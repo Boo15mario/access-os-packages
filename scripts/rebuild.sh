@@ -146,6 +146,22 @@ build_extra() {
     return 0
   fi
 
+  # Some AUR packages depend on other AUR-only packages. Since makepkg --syncdeps
+  # can only install dependencies from pacman repos, we optionally install
+  # certain built packages into the build environment to satisfy later builds.
+  local -a install_after_build_pkgs=(
+    lib32-unixodbc
+  )
+
+  should_install_after_build() {
+    local name="$1"
+    local p
+    for p in "${install_after_build_pkgs[@]}"; do
+      [[ "${name}" == "${p}" ]] && return 0
+    done
+    return 1
+  }
+
   recv_pgp_key() {
     local key="$1"
     gpg --batch --keyserver hkps://keyserver.ubuntu.com --recv-keys "${key}" >/dev/null 2>&1 && return 0
@@ -234,6 +250,16 @@ build_extra() {
       makepkg_flags=(--nodeps --noconfirm --clean --cleanbuild --needed)
     fi
     makepkg_with_pgp_retry "${aur_root}/${pkg}" "${pkg}" "${makepkg_flags[@]}"
+
+    if should_install_after_build "${pkg}"; then
+      echo "    installing built package into build environment: ${pkg}"
+      local -a built_files=()
+      mapfile -t built_files < <(cd "${aur_root}/${pkg}" && PKGDEST="${out_dir}" makepkg --packagelist)
+      if [[ "${#built_files[@]}" -eq 0 ]]; then
+        die "failed to determine built package file(s) for ${pkg}"
+      fi
+      sudo pacman -U --noconfirm "${built_files[@]}"
+    fi
   done
 }
 
