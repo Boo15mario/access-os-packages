@@ -169,6 +169,26 @@ build_extra() {
     return 1
   }
 
+  aur_package_exists() {
+    local pkg="$1"
+    local aur_json
+
+    aur_json="$(
+      curl -fsSLG \
+        --retry 3 \
+        --retry-all-errors \
+        --connect-timeout 10 \
+        --max-time 30 \
+        --data-urlencode "v=5" \
+        --data-urlencode "type=info" \
+        --data-urlencode "arg[]=${pkg}" \
+        "https://aur.archlinux.org/rpc/" || true
+    )"
+
+    [[ -n "${aur_json}" ]] || return 2
+    [[ "$(jq -r '.resultcount // 0' <<<"${aur_json}")" != "0" ]]
+  }
+
   import_pgp_keys() {
     local pkg_dir="$1"
     local -a keys=()
@@ -240,6 +260,29 @@ build_extra() {
     done
   }
 
+  save_pkgbuild_snapshot() {
+    local pkg_dir="$1"
+    local save_dir="$2"
+    local item
+
+    rm -rf -- "${save_dir}"
+    mkdir -p -- "${save_dir}"
+
+    (
+      cd "${pkg_dir}"
+      shopt -s dotglob nullglob
+      for item in * .*; do
+        case "${item}" in
+          .|..|.git|src|pkg) continue ;;
+        esac
+        case "${item}" in
+          *.pkg.tar.*|*.src.tar.*|*.log) continue ;;
+        esac
+        cp -a -- "${item}" "${save_dir}/"
+      done
+    )
+  }
+
   echo "Building ${#pkgs[@]} AUR package(s)..."
   local pkgbuilds_save_dir="${REPO_ROOT}/pkgbuilds"
   mkdir -p "${pkgbuilds_save_dir}"
@@ -247,16 +290,29 @@ build_extra() {
     echo "  - ${pkg}"
     local pkg_dir="${aur_root}/${pkg}"
 
-    # Try to clone from AUR; fall back to a saved PKGBUILD if the package was removed
+    # Only use a saved snapshot when the package is actually gone from AUR.
+    # Network or transient clone failures should still fail the build.
     if ! git clone --depth 1 "https://aur.archlinux.org/${pkg}.git" "${pkg_dir}"; then
-      echo "  Warning: failed to clone ${pkg} from AUR; package may have been removed" >&2
+      echo "  Warning: failed to clone ${pkg} from AUR" >&2
+
+      local aur_exists_rc
+      set +e
+      aur_package_exists "${pkg}"
+      aur_exists_rc="$?"
+      set -e
+
+      if [[ "${aur_exists_rc}" -eq 0 ]]; then
+        die "failed to clone ${pkg} from AUR even though it still exists"
+      fi
+      if [[ "${aur_exists_rc}" -eq 2 ]]; then
+        die "failed to query AUR after clone failure for ${pkg}"
+      fi
       if [[ -d "${pkgbuilds_save_dir}/${pkg}" && -f "${pkgbuilds_save_dir}/${pkg}/PKGBUILD" ]]; then
-        echo "    Using saved PKGBUILD from pkgbuilds/${pkg}" >&2
+        echo "    Using saved snapshot from pkgbuilds/${pkg}" >&2
         mkdir -p "${pkg_dir}"
         cp -r "${pkgbuilds_save_dir}/${pkg}/." "${pkg_dir}/"
       else
-        echo "    No saved PKGBUILD for ${pkg}; skipping" >&2
-        continue
+        die "${pkg} is unavailable from AUR and no saved fallback exists"
       fi
     fi
 
@@ -267,10 +323,7 @@ build_extra() {
     fi
     makepkg_with_pgp_retry "${pkg_dir}" "${pkg}" "${makepkg_flags[@]}"
 
-    # Save PKGBUILD (and .SRCINFO) after a successful build
-    mkdir -p "${pkgbuilds_save_dir}/${pkg}"
-    cp -f "${pkg_dir}/PKGBUILD" "${pkgbuilds_save_dir}/${pkg}/PKGBUILD"
-    [[ -f "${pkg_dir}/.SRCINFO" ]] && cp -f "${pkg_dir}/.SRCINFO" "${pkgbuilds_save_dir}/${pkg}/.SRCINFO"
+    save_pkgbuild_snapshot "${pkg_dir}" "${pkgbuilds_save_dir}/${pkg}"
 
     if should_install_after_build "${pkg}"; then
       echo "    installing built package into build environment: ${pkg}"

@@ -29,9 +29,10 @@ Notes:
 
 ### AUR (`access-os-extra`)
 - Edit `package-lists/access-os-extra.txt`.
-- If a package is later **removed from the AUR**, CI will automatically fall
-  back to the saved PKGBUILD in `pkgbuilds/<pkgname>/` (saved after each
-  successful build) and continue building the package without interruption.
+- If a package is later **removed from the AUR**, CI will only fall back to a
+  saved snapshot in `pkgbuilds/<pkgname>/`.
+- If a listed package is missing from AUR and no saved snapshot exists, the
+  workflow fails so the package list does not silently drift.
 
 ### Core (`access-os-core`)
 - Add a PKGBUILD under `packages/core/<pkgname>/PKGBUILD` (plus any needed files/patches).
@@ -39,15 +40,16 @@ Notes:
 
 ## PKGBUILDs
 
-The `pkgbuilds/` directory stores PKGBUILD snapshots automatically committed by
-CI after each successful AUR package build. These serve as a fallback if a
-package is removed from the AUR.
+The `pkgbuilds/` directory stores saved AUR packaging snapshots automatically
+committed by CI after each successful AUR package build. These snapshots are
+used only when a package is no longer available from AUR.
 
 You can also add a PKGBUILD manually (e.g. for a package recently removed from
 the AUR before CI had a chance to save it):
 
-1. Create `pkgbuilds/<pkgname>/PKGBUILD` (and optionally `.SRCINFO`).
-2. Commit the file.
+1. Create `pkgbuilds/<pkgname>/` with `PKGBUILD` and any other files that the
+   package build needs.
+2. Commit the directory.
 3. CI will use it to continue building the package.
 
 ## Automation
