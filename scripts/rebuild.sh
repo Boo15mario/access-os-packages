@@ -329,8 +329,14 @@ build_extra() {
 
     if should_install_after_build "${pkg}"; then
       echo "    installing built package into build environment: ${pkg}"
+      local -a package_list=()
       local -a built_files=()
-      mapfile -t built_files < <(cd "${pkg_dir}" && PKGDEST="${out_dir}" makepkg --packagelist)
+      local built_file
+      mapfile -t package_list < <(cd "${pkg_dir}" && PKGDEST="${out_dir}" makepkg --packagelist)
+      for built_file in "${package_list[@]}"; do
+        [[ -f "${built_file}" ]] || continue
+        built_files+=("${built_file}")
+      done
       if [[ "${#built_files[@]}" -eq 0 ]]; then
         die "failed to determine built package file(s) for ${pkg}"
       fi
