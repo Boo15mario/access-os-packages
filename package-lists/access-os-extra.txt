@@ -24,6 +24,7 @@ lib32-unixodbc
 wine-stable
 update-grub
 quickemu
+virtio-win
 python3-memoizedb
 python3-xcgf
 python3-xcpf
