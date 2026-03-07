@@ -151,6 +151,7 @@ build_extra() {
   # certain built packages into the build environment to satisfy later builds.
   local -a install_after_build_pkgs=(
     lib32-unixodbc
+    openssl-1.0
     python3-memoizedb
     python3-xcgf
     samba-support
