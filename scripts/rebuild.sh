@@ -151,6 +151,8 @@ build_extra() {
   # certain built packages into the build environment to satisfy later builds.
   local -a install_after_build_pkgs=(
     lib32-unixodbc
+    python3-memoizedb
+    python3-xcgf
   )
 
   should_install_after_build() {
