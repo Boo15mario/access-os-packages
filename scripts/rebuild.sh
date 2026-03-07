@@ -153,6 +153,7 @@ build_extra() {
     lib32-unixodbc
     python3-memoizedb
     python3-xcgf
+    samba-support
   )
 
   should_install_after_build() {
