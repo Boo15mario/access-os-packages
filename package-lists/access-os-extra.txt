@@ -12,6 +12,7 @@ mkinitcpio-firmware
 neofetch
 reiserfsprogs
 pacman-cleanup-hook
+reflector-pacman-hook-git
 samba-support
 ttf-mac-fonts
 ttf-ms-fonts
