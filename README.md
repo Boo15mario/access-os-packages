@@ -31,6 +31,10 @@ Notes:
 - Edit `package-lists/access-os-extra.txt`.
 - If a package is later **removed from the AUR**, CI will only fall back to a
   saved snapshot in `pkgbuilds/<pkgname>/`.
+- Confirmed removed packages are tracked automatically in
+  `metadata/removed-from-aur.json` and `metadata/removed-from-aur.txt`.
+- If a removed package later returns to AUR, CI removes it from the removed
+  tracking files automatically.
 - If a listed package is missing from AUR and no saved snapshot exists, the
   workflow fails so the package list does not silently drift.
 
@@ -43,6 +47,21 @@ Notes:
 The `pkgbuilds/` directory stores saved AUR packaging snapshots automatically
 committed by CI after each successful AUR package build. These snapshots are
 used only when a package is no longer available from AUR.
+
+## Removed AUR tracking
+
+Removed-but-preserved AUR packages are tracked in:
+
+- `metadata/removed-from-aur.json`: canonical machine-readable registry
+- `metadata/removed-from-aur.txt`: generated package-name list
+
+CI updates these files automatically:
+- when a listed package disappears from AUR but still has a saved fallback in
+  `pkgbuilds/`
+- when a previously removed package returns to AUR
+
+If a package disappears from AUR and no saved fallback exists, the workflow
+fails instead of silently dropping it.
 
 You can also add a PKGBUILD manually (e.g. for a package recently removed from
 the AUR before CI had a chance to save it):

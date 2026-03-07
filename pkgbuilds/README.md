@@ -10,6 +10,8 @@ after each successful AUR package build.
 - **Build context preservation**: Each subdirectory may contain `PKGBUILD`,
   `.SRCINFO`, patches, install files, or other packaging files needed for a
   rebuild.
+- **Removed package tracking**: Packages using these fallbacks are also recorded
+  in `metadata/removed-from-aur.json` and `metadata/removed-from-aur.txt`.
 
 ## Layout
 

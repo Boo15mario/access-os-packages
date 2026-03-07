@@ -19,6 +19,8 @@ EXTRA_REPO="${EXTRA_REPO:-access-os-extra}"
 require_cmd jq
 require_cmd curl
 
+"${REPO_ROOT}/scripts/sync-removed-from-aur.sh"
+
 if [[ -n "${PAGES_BASE_URL:-}" ]]; then
   base_url="${PAGES_BASE_URL%/}"
 elif [[ -n "${GITHUB_REPOSITORY_OWNER:-}" && -n "${GITHUB_REPOSITORY:-}" ]]; then
@@ -88,8 +90,15 @@ if [[ "${rebuild_required}" == "true" ]]; then
 fi
 
 if [[ -n "${GITHUB_OUTPUT:-}" ]]; then
+  metadata_changed="false"
+  if git -C "${REPO_ROOT}" rev-parse --is-inside-work-tree >/dev/null 2>&1; then
+    if ! git -C "${REPO_ROOT}" diff --quiet -- metadata/removed-from-aur.json metadata/removed-from-aur.txt; then
+      metadata_changed="true"
+    fi
+  fi
   {
     echo "rebuild_required=${rebuild_required}"
     echo "pages_base_url=${base_url}"
+    echo "metadata_changed=${metadata_changed}"
   } >>"${GITHUB_OUTPUT}"
 fi
