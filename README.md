@@ -57,6 +57,7 @@ Preflight check:
 
 ```bash
 ./scripts/check-builder.sh
+./scripts/publish-local.sh --preflight
 ```
 
 Local publish entrypoint:

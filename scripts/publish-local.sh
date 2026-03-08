@@ -12,7 +12,7 @@ require_cmd() {
 
 usage() {
   cat <<'EOF'
-Usage: publish-local.sh [--build-only] [--publish-only] [--no-push] [--skip-commit]
+Usage: publish-local.sh [--build-only] [--publish-only] [--no-push] [--skip-commit] [--preflight]
 
 Build and publish the access-os pacman repositories from a local Arch system.
 
@@ -21,6 +21,7 @@ Flags:
   --publish-only  Publish existing dist/ and site/ outputs; skip the rebuild
   --no-push       Do not push git commits or the gh-pages branch
   --skip-commit   Do not commit pkgbuilds/ or metadata/ changes
+  --preflight     Run builder readiness checks and exit
   -h, --help      Show this help
 
 Environment overrides:
@@ -45,6 +46,7 @@ BUILD_ONLY=0
 PUBLISH_ONLY=0
 NO_PUSH=0
 SKIP_COMMIT=0
+PREFLIGHT_ONLY=0
 
 while [[ $# -gt 0 ]]; do
   case "$1" in
@@ -52,6 +54,7 @@ while [[ $# -gt 0 ]]; do
     --publish-only) PUBLISH_ONLY=1 ;;
     --no-push) NO_PUSH=1 ;;
     --skip-commit) SKIP_COMMIT=1 ;;
+    --preflight) PREFLIGHT_ONLY=1 ;;
     -h|--help)
       usage
       exit 0
@@ -178,6 +181,10 @@ commit_repo_metadata() {
 }
 
 ensure_gh_auth
+"${REPO_ROOT}/scripts/check-builder.sh"
+if [[ "${PREFLIGHT_ONLY}" -eq 1 ]]; then
+  exit 0
+fi
 "${REPO_ROOT}/scripts/sync-removed-from-aur.sh"
 
 if [[ "${PUBLISH_ONLY}" -eq 0 ]]; then

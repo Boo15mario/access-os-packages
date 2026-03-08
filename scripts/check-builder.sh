@@ -10,6 +10,16 @@ Verify that the local Arch Linux system is ready to run
 EOF
 }
 
+PACKAGES=(
+  base-devel
+  git
+  curl
+  jq
+  pacman-contrib
+  devtools
+  github-cli
+)
+
 if [[ "${1:-}" == "-h" || "${1:-}" == "--help" ]]; then
   usage
   exit 0
@@ -41,6 +51,14 @@ check_cmd() {
 
 for cmd in git curl jq gh makepkg repo-add; do
   check_cmd "${cmd}"
+done
+
+for pkg in "${PACKAGES[@]}"; do
+  if pacman -Q "${pkg}" >/dev/null 2>&1; then
+    pass "package installed: ${pkg}"
+  else
+    fail "missing package: ${pkg}"
+  fi
 done
 
 if grep -Eq '^[[:space:]]*\[multilib\]' /etc/pacman.conf; then
