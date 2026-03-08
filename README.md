@@ -3,7 +3,7 @@
 Two pacman repositories for Access OS (Arch Linux based):
 
 - `access-os-core`: Access OS maintained packages (PKGBUILDs live in this repo)
-- `access-os-extra`: AUR packages built by CI (start small, grow intentionally)
+- `access-os-extra`: AUR packages built locally on your Arch system
 
 ## Using the repos
 
@@ -25,6 +25,49 @@ Notes:
 - Package files (`*.pkg.tar.zst`) are stored as **GitHub Release assets** under moving tags like `access-os-core-x86_64`.
 - Repo databases (`$repo.db`, `$repo.files`) and `manifest.json` are published on **GitHub Pages**.
 
+## Local builder setup
+
+Build and publish this repo from a local Arch Linux system.
+
+Minimum packages to install:
+
+```bash
+sudo pacman -S --needed base-devel git curl jq pacman-contrib devtools github-cli
+```
+
+Recommended extras:
+
+```bash
+sudo pacman -S --needed ccache reflector rsync
+```
+
+Required one-time setup:
+
+1. Enable `multilib` in `/etc/pacman.conf`.
+2. Authenticate GitHub CLI with `gh auth login`.
+3. In GitHub repo settings, configure **Pages** to deploy from the `gh-pages` branch.
+
+Local publish entrypoint:
+
+```bash
+./scripts/publish-local.sh
+```
+
+Useful modes:
+
+```bash
+./scripts/publish-local.sh --build-only
+./scripts/publish-local.sh --publish-only
+./scripts/publish-local.sh --no-push
+```
+
+What `scripts/publish-local.sh` does:
+- refreshes removed-AUR tracking metadata
+- runs `scripts/rebuild.sh` on your Arch system
+- uploads package files to the moving GitHub Release tags
+- commits updated `pkgbuilds/` and `metadata/` unless `--skip-commit` is used
+- pushes generated `site/` content to the `gh-pages` branch for GitHub Pages
+
 ## Adding packages
 
 ### AUR (`access-os-extra`)
@@ -40,12 +83,12 @@ Notes:
 
 ### Core (`access-os-core`)
 - Add a PKGBUILD under `packages/core/<pkgname>/PKGBUILD` (plus any needed files/patches).
-- CI will build every core package in `packages/core/*`.
+- Local publishing will build every core package in `packages/core/*`.
 
 ## PKGBUILDs
 
 The `pkgbuilds/` directory stores saved AUR packaging snapshots automatically
-committed by CI after each successful AUR package build. These snapshots are
+committed during local publishing after each successful AUR package build. These snapshots are
 used only when a package is no longer available from AUR.
 
 ## Removed AUR tracking
@@ -55,7 +98,7 @@ Removed-but-preserved AUR packages are tracked in:
 - `metadata/removed-from-aur.json`: canonical machine-readable registry
 - `metadata/removed-from-aur.txt`: generated package-name list
 
-CI updates these files automatically:
+Local publishing refreshes these files automatically, and CI validates them:
 - when a listed package disappears from AUR but still has a saved fallback in
   `pkgbuilds/`
 - when a previously removed package returns to AUR
@@ -73,12 +116,19 @@ the AUR before CI had a chance to save it):
 
 ## Automation
 
-GitHub Actions runs on a schedule and:
-- Computes the desired `manifest.json` (core PKGBUILDs + AUR versions).
-- Compares it to the published Pages `manifest.json`.
-- If anything changed, rebuilds everything, uploads packages to Releases, and updates Pages DBs.
+GitHub Actions is validation-only. It does not build or publish packages.
+
+Actions checks:
+- shell script syntax
+- workflow YAML validity
+- AUR metadata and removed-package tracking
+- manifest generation and update detection
+- `scripts/rebuild.sh --dry-run`
+
+Package building and publishing now happens locally on your Arch system through
+`scripts/publish-local.sh`.
 
 ## One-time GitHub setup
 
-1. Repo **Settings → Pages → Build and deployment**: set **Source** to **GitHub Actions**.
-2. Repo **Settings → Actions → General → Workflow permissions**: set to **Read and write**.
+1. Repo **Settings → Pages → Build and deployment**: set **Source** to **Deploy from a branch**.
+2. Select branch `gh-pages` and folder `/ (root)`.
