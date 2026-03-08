@@ -32,6 +32,12 @@ Build and publish this repo from a local Arch Linux system.
 Minimum packages to install:
 
 ```bash
+./scripts/bootstrap-builder.sh
+```
+
+Equivalent manual package list:
+
+```bash
 sudo pacman -S --needed base-devel git curl jq pacman-contrib devtools github-cli
 ```
 
