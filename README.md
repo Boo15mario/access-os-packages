@@ -53,6 +53,12 @@ Required one-time setup:
 2. Authenticate GitHub CLI with `gh auth login`.
 3. In GitHub repo settings, configure **Pages** to deploy from the `gh-pages` branch.
 
+Preflight check:
+
+```bash
+./scripts/check-builder.sh
+```
+
 Local publish entrypoint:
 
 ```bash
