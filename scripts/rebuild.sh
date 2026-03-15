@@ -56,12 +56,58 @@ WORK_ROOT="${WORK_ROOT:-${REPO_ROOT}/work}"
 CLEAN_BEFORE_BUILD="${CLEAN_BEFORE_BUILD:-1}"
 DOWNLOAD_HTTP_RETRIES="${DOWNLOAD_HTTP_RETRIES:-5}"
 DOWNLOAD_HTTP_RETRY_DELAY="${DOWNLOAD_HTTP_RETRY_DELAY:-3}"
+MAKEPKG_JOBS="${MAKEPKG_JOBS:-auto}"
+MAKEPKG_JOBS_MAX="${MAKEPKG_JOBS_MAX:-15}"
 
 MAKEPKG_DLAGENTS=(
   "https::/usr/bin/curl --http1.1 -qgLC - --retry ${DOWNLOAD_HTTP_RETRIES} --retry-delay ${DOWNLOAD_HTTP_RETRY_DELAY} --retry-all-errors --fail -o %o %u"
   "http::/usr/bin/curl --http1.1 -qgLC - --retry ${DOWNLOAD_HTTP_RETRIES} --retry-delay ${DOWNLOAD_HTTP_RETRY_DELAY} --retry-all-errors --fail -o %o %u"
   "ftp::/usr/bin/curl --http1.1 -qgLC - --retry ${DOWNLOAD_HTTP_RETRIES} --retry-delay ${DOWNLOAD_HTTP_RETRY_DELAY} --retry-all-errors --fail -o %o %u"
 )
+
+resolve_makepkg_jobs() {
+  local cpu_cores total_mem_kb total_mem_gb ram_jobs jobs
+
+  [[ "${MAKEPKG_JOBS_MAX}" =~ ^[0-9]+$ ]] || die "MAKEPKG_JOBS_MAX must be a positive integer"
+  if [[ "${MAKEPKG_JOBS_MAX}" -lt 1 ]]; then
+    die "MAKEPKG_JOBS_MAX must be at least 1"
+  fi
+
+  if [[ "${MAKEPKG_JOBS}" == "auto" ]]; then
+    cpu_cores="$(nproc)"
+    [[ -n "${cpu_cores}" && "${cpu_cores}" =~ ^[0-9]+$ ]] || die "failed to determine CPU core count"
+
+    total_mem_kb="$(awk '/^MemTotal:/ {print $2; exit}' /proc/meminfo)"
+    [[ -n "${total_mem_kb}" && "${total_mem_kb}" =~ ^[0-9]+$ ]] || die "failed to determine total system memory"
+
+    total_mem_gb="$(( total_mem_kb / 1024 / 1024 ))"
+    ram_jobs="$(( total_mem_gb / 2 ))"
+
+    jobs="${cpu_cores}"
+    if [[ "${ram_jobs}" -lt "${jobs}" ]]; then
+      jobs="${ram_jobs}"
+    fi
+    if [[ "${MAKEPKG_JOBS_MAX}" -lt "${jobs}" ]]; then
+      jobs="${MAKEPKG_JOBS_MAX}"
+    fi
+    if [[ "${jobs}" -lt 1 ]]; then
+      jobs=1
+    fi
+
+    printf '%s\n' "${jobs}"
+    return 0
+  fi
+
+  [[ "${MAKEPKG_JOBS}" =~ ^[0-9]+$ ]] || die "MAKEPKG_JOBS must be a positive integer or 'auto'"
+  if [[ "${MAKEPKG_JOBS}" -lt 1 ]]; then
+    die "MAKEPKG_JOBS must be at least 1"
+  fi
+
+  printf '%s\n' "${MAKEPKG_JOBS}"
+}
+
+RESOLVED_MAKEPKG_JOBS="$(resolve_makepkg_jobs)"
+MAKEPKG_MAKEFLAGS="-j${RESOLVED_MAKEPKG_JOBS}"
 
 if [[ "${DRY_RUN}" == "1" ]]; then
   echo "Repo root: ${REPO_ROOT}"
@@ -73,6 +119,7 @@ if [[ "${DRY_RUN}" == "1" ]]; then
   echo "Site dir: ${SITE_DIR}"
   echo "Work root: ${WORK_ROOT}"
   echo "Clean before build: ${CLEAN_BEFORE_BUILD}"
+  echo "Makepkg jobs: ${RESOLVED_MAKEPKG_JOBS} (MAKEPKG_JOBS=${MAKEPKG_JOBS}, cap=${MAKEPKG_JOBS_MAX})"
   exit 0
 fi
 
@@ -103,6 +150,8 @@ start_sudo_keepalive() {
 
 trap stop_sudo_keepalive EXIT
 start_sudo_keepalive
+
+echo "Using makepkg jobs: ${RESOLVED_MAKEPKG_JOBS} (MAKEFLAGS=${MAKEPKG_MAKEFLAGS})"
 
 clean_dir_contents() {
   local dir="$1"
@@ -155,7 +204,12 @@ build_core() {
   for pkgbuild in "${pkgbuilds[@]}"; do
     pkg_dir="$(cd -- "$(dirname -- "${pkgbuild}")" && pwd)"
     echo "  - ${pkg_dir}"
-    (cd "${pkg_dir}" && PKGDEST="${out_dir}" makepkg --syncdeps --noconfirm --clean --cleanbuild --needed)
+    (
+      cd "${pkg_dir}" && \
+      PKGDEST="${out_dir}" \
+      MAKEFLAGS="${MAKEPKG_MAKEFLAGS}" \
+      makepkg --syncdeps --noconfirm --clean --cleanbuild --needed
+    )
   done
 }
 
@@ -267,6 +321,7 @@ makepkg_with_pgp_retry() {
       (
         cd "${pkg_dir}" && \
         PKGDEST="${out_dir}" \
+        MAKEFLAGS="${MAKEPKG_MAKEFLAGS}" \
         DLAGENTS=("${MAKEPKG_DLAGENTS[@]}") \
         makepkg "${makepkg_flags[@]}"
       ) 2>&1 | tee "${log_file}"
@@ -378,6 +433,7 @@ makepkg_with_pgp_retry() {
       mapfile -t package_list < <(
         cd "${pkg_dir}" && \
         PKGDEST="${out_dir}" \
+        MAKEFLAGS="${MAKEPKG_MAKEFLAGS}" \
         DLAGENTS=("${MAKEPKG_DLAGENTS[@]}") \
         makepkg --packagelist
       )

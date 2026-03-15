@@ -89,6 +89,14 @@ helps with flaky upstream TLS endpoints used by some AUR packages.
 timestamp alive during the build, so mid-build `sudo pacman -U` steps do not
 keep asking for your password.
 
+Local builds also auto-tune `makepkg` parallel jobs from CPU cores and total
+RAM, then cap the result at `15` by default. You can override that at runtime:
+
+```bash
+MAKEPKG_JOBS=5 ./scripts/rebuild.sh
+MAKEPKG_JOBS=8 ./scripts/publish-local.sh
+```
+
 ## Adding packages
 
 ### AUR (`access-os-extra`)
