@@ -54,6 +54,14 @@ DIST_DIR="${DIST_DIR:-${REPO_ROOT}/dist}"
 SITE_DIR="${SITE_DIR:-${REPO_ROOT}/site}"
 WORK_ROOT="${WORK_ROOT:-${REPO_ROOT}/work}"
 CLEAN_BEFORE_BUILD="${CLEAN_BEFORE_BUILD:-1}"
+DOWNLOAD_HTTP_RETRIES="${DOWNLOAD_HTTP_RETRIES:-5}"
+DOWNLOAD_HTTP_RETRY_DELAY="${DOWNLOAD_HTTP_RETRY_DELAY:-3}"
+
+MAKEPKG_DLAGENTS=(
+  "https::/usr/bin/curl --http1.1 -qgLC - --retry ${DOWNLOAD_HTTP_RETRIES} --retry-delay ${DOWNLOAD_HTTP_RETRY_DELAY} --retry-all-errors --fail -o %o %u"
+  "http::/usr/bin/curl --http1.1 -qgLC - --retry ${DOWNLOAD_HTTP_RETRIES} --retry-delay ${DOWNLOAD_HTTP_RETRY_DELAY} --retry-all-errors --fail -o %o %u"
+  "ftp::/usr/bin/curl --http1.1 -qgLC - --retry ${DOWNLOAD_HTTP_RETRIES} --retry-delay ${DOWNLOAD_HTTP_RETRY_DELAY} --retry-all-errors --fail -o %o %u"
+)
 
 if [[ "${DRY_RUN}" == "1" ]]; then
   echo "Repo root: ${REPO_ROOT}"
@@ -215,7 +223,7 @@ build_extra() {
     done
   }
 
-  makepkg_with_pgp_retry() {
+makepkg_with_pgp_retry() {
     local pkg_dir="$1"
     local pkg_name="$2"
     shift 2
@@ -228,7 +236,12 @@ build_extra() {
       log_file="$(mktemp "${work_dir%/}/makepkg.${pkg_name}.XXXXXX.log")"
 
       set +e
-      (cd "${pkg_dir}" && PKGDEST="${out_dir}" makepkg "${makepkg_flags[@]}") 2>&1 | tee "${log_file}"
+      (
+        cd "${pkg_dir}" && \
+        PKGDEST="${out_dir}" \
+        DLAGENTS=("${MAKEPKG_DLAGENTS[@]}") \
+        makepkg "${makepkg_flags[@]}"
+      ) 2>&1 | tee "${log_file}"
       rc="${PIPESTATUS[0]}"
       set -e
 
@@ -334,7 +347,12 @@ build_extra() {
       local -a package_list=()
       local -a built_files=()
       local built_file
-      mapfile -t package_list < <(cd "${pkg_dir}" && PKGDEST="${out_dir}" makepkg --packagelist)
+      mapfile -t package_list < <(
+        cd "${pkg_dir}" && \
+        PKGDEST="${out_dir}" \
+        DLAGENTS=("${MAKEPKG_DLAGENTS[@]}") \
+        makepkg --packagelist
+      )
       for built_file in "${package_list[@]}"; do
         [[ -f "${built_file}" ]] || continue
         built_files+=("${built_file}")

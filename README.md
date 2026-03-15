@@ -81,6 +81,10 @@ What `scripts/publish-local.sh` does:
 - commits updated `pkgbuilds/` and `metadata/` unless `--skip-commit` is used
 - pushes generated `site/` content to the `gh-pages` branch for GitHub Pages
 
+Local builds also harden source downloads inside `scripts/rebuild.sh` by using
+repo-local `makepkg` download settings with `curl --http1.1` and retries. This
+helps with flaky upstream TLS endpoints used by some AUR packages.
+
 ## Adding packages
 
 ### AUR (`access-os-extra`)
