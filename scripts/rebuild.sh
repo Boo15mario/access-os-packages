@@ -76,6 +76,34 @@ if [[ "${DRY_RUN}" == "1" ]]; then
   exit 0
 fi
 
+sudo_keepalive_pid=""
+
+stop_sudo_keepalive() {
+  if [[ -n "${sudo_keepalive_pid}" ]]; then
+    kill "${sudo_keepalive_pid}" >/dev/null 2>&1 || true
+    wait "${sudo_keepalive_pid}" 2>/dev/null || true
+    sudo_keepalive_pid=""
+  fi
+}
+
+start_sudo_keepalive() {
+  command -v sudo >/dev/null 2>&1 || die "sudo is required for local dependency installs"
+
+  echo "Authenticating sudo for local package installs..."
+  sudo -v
+
+  (
+    while true; do
+      sudo -n true >/dev/null 2>&1 || exit 0
+      sleep 30
+    done
+  ) &
+  sudo_keepalive_pid="$!"
+}
+
+trap stop_sudo_keepalive EXIT
+start_sudo_keepalive
+
 clean_dir_contents() {
   local dir="$1"
   [[ -n "${dir}" ]] || die "clean_dir_contents: empty path"

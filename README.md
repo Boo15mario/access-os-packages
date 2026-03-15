@@ -85,6 +85,10 @@ Local builds also harden source downloads inside `scripts/rebuild.sh` by using
 repo-local `makepkg` download settings with `curl --http1.1` and retries. This
 helps with flaky upstream TLS endpoints used by some AUR packages.
 
+`scripts/rebuild.sh` also authenticates `sudo` once at startup and keeps the
+timestamp alive during the build, so mid-build `sudo pacman -U` steps do not
+keep asking for your password.
+
 ## Adding packages
 
 ### AUR (`access-os-extra`)
