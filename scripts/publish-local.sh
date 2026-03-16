@@ -100,6 +100,32 @@ ensure_gh_auth() {
   gh auth status >/dev/null 2>&1 || die "GitHub CLI is not authenticated; run: gh auth login"
 }
 
+resolve_pages_base_url() {
+  local remote_url parsed owner repo_name
+
+  if [[ -n "${PAGES_BASE_URL:-}" ]]; then
+    printf '%s\n' "${PAGES_BASE_URL%/}"
+    return 0
+  fi
+
+  if [[ -n "${GITHUB_REPOSITORY_OWNER:-}" && -n "${GITHUB_REPOSITORY:-}" ]]; then
+    repo_name="${GITHUB_REPOSITORY#*/}"
+    printf 'https://%s.github.io/%s\n' "${GITHUB_REPOSITORY_OWNER}" "${repo_name}"
+    return 0
+  fi
+
+  remote_url="$(git -C "${REPO_ROOT}" remote get-url "${REMOTE_NAME}" 2>/dev/null || true)"
+  [[ -n "${remote_url}" ]] || return 1
+
+  parsed="$(sed -nE 's#^.*[:/]([^/:]+)/([^/]+)(\\.git)?$#\\1 \\2#p' <<<"${remote_url}")"
+  [[ -n "${parsed}" ]] || return 1
+
+  owner="${parsed%% *}"
+  repo_name="${parsed#* }"
+  repo_name="${repo_name%.git}"
+  printf 'https://%s.github.io/%s\n' "${owner}" "${repo_name}"
+}
+
 ensure_publish_inputs() {
   local repo_dir
   for repo_dir in \
@@ -276,6 +302,145 @@ stage_incremental_repo_update() {
   refresh_site_metadata
 }
 
+fetch_remote_manifest() {
+  local base_url="$1"
+  curl -fsSL "${base_url}/manifest.json" | jq -S .
+}
+
+fetch_remote_repo_versions() {
+  local base_url="$1"
+  local repo="$2"
+  local tmpdir db_file json
+
+  tmpdir="$(mktemp -d "${REPO_ROOT%/}/work/reconcile.XXXXXXXX")"
+  db_file="${tmpdir}/${repo}.db.tar.gz"
+  json='{}'
+
+  curl -fsSL "${base_url}/${repo}/os/${ARCH}/${repo}.db" -o "${db_file}"
+  tar -xzf "${db_file}" -C "${tmpdir}"
+
+  while IFS=$'\t' read -r pkg ver; do
+    [[ -n "${pkg}" && -n "${ver}" ]] || continue
+    json="$(jq -c --arg pkg "${pkg}" --arg ver "${ver}" '. + {($pkg): $ver}' <<<"${json}")"
+  done < <(
+    find "${tmpdir}" -mindepth 2 -maxdepth 2 -type f -name desc -print0 | \
+      xargs -0 awk '
+        BEGIN { pkg=""; ver="" }
+        /^%NAME%$/ { getline; pkg=$0 }
+        /^%VERSION%$/ { getline; ver=$0 }
+        ENDFILE {
+          if (pkg != "" && ver != "") {
+            printf "%s\t%s\n", pkg, ver
+          }
+          pkg=""
+          ver=""
+        }
+      '
+  )
+
+  jq -S . <<<"${json}"
+  rm -rf -- "${tmpdir}"
+}
+
+release_assets_json() {
+  local repo="$1"
+  local tag="${repo}-${ARCH}"
+  gh release view "${tag}" --json assets | jq -c '[.assets[].name]'
+}
+
+check_release_assets_for_repo() {
+  local repo="$1"
+  local repo_dir="${REPO_ROOT}/dist/${repo}/${ARCH}"
+  local assets_json file base_name
+  local missing=0
+
+  assets_json="$(release_assets_json "${repo}")"
+
+  shopt -s nullglob
+  for file in "${repo_dir}/"*.pkg.tar.*; do
+    [[ "${file}" == *.sig ]] && continue
+    base_name="$(basename -- "${file}")"
+    if ! jq -e --arg name "${base_name}" 'index($name)' <<<"${assets_json}" >/dev/null; then
+      echo "Release asset missing for ${repo}: ${base_name}" >&2
+      missing=1
+    fi
+  done
+  shopt -u nullglob
+
+  [[ "${missing}" -eq 0 ]]
+}
+
+reconcile_repo_metadata() {
+  local repo="$1"
+  local local_manifest_json="$2"
+  local base_url="$3"
+  local local_repo_versions remote_repo_versions mismatches
+
+  local_repo_versions="$(jq -c --arg repo "${repo}" '.repos[$repo].packages // {}' <<<"${local_manifest_json}")"
+  remote_repo_versions="$(fetch_remote_repo_versions "${base_url}" "${repo}")"
+
+  mismatches="$(
+    jq -r \
+      --argjson local "${local_repo_versions}" \
+      --argjson remote "${remote_repo_versions}" \
+      '
+      ($local | keys | sort)[] as $pkg
+      | select(($remote[$pkg] // "") != ($local[$pkg] // ""))
+      | "\($pkg)\tlocal=\($local[$pkg])\tremote=\($remote[$pkg] // "<missing>")"
+      '
+  )"
+
+  if [[ -n "${mismatches}" ]]; then
+    echo "Repo DB mismatch for ${repo}:" >&2
+    while IFS= read -r line; do
+      [[ -n "${line}" ]] || continue
+      echo "  - ${line}" >&2
+    done <<<"${mismatches}"
+    return 1
+  fi
+
+  check_release_assets_for_repo "${repo}"
+}
+
+reconcile_published_state() {
+  local base_url local_manifest_json remote_manifest_json
+
+  [[ "${NO_PUSH}" -eq 0 ]] || return 0
+
+  base_url="$(resolve_pages_base_url)" || {
+    echo "Error: failed to determine Pages base URL for reconciliation" >&2
+    return 1
+  }
+
+  local_manifest_json="$(jq -S . "${REPO_ROOT}/site/manifest.json")"
+  remote_manifest_json="$(fetch_remote_manifest "${base_url}")" || {
+    echo "Error: failed to fetch published manifest during reconciliation" >&2
+    return 1
+  }
+
+  if [[ "${local_manifest_json}" != "${remote_manifest_json}" ]]; then
+    echo "Manifest mismatch between local staged site and published Pages metadata" >&2
+    return 1
+  fi
+
+  reconcile_repo_metadata "${CORE_REPO}" "${local_manifest_json}" "${base_url}" || return 1
+  reconcile_repo_metadata "${EXTRA_REPO}" "${local_manifest_json}" "${base_url}" || return 1
+}
+
+reconcile_with_retry() {
+  [[ "${NO_PUSH}" -eq 0 ]] || return 0
+
+  sleep 3
+  if reconcile_published_state; then
+    return 0
+  fi
+
+  echo "Warning: published state mismatch detected; retrying GitHub Pages publish once" >&2
+  publish_pages_branch
+  sleep 3
+  reconcile_published_state || die "published GitHub Releases and Pages metadata are still out of sync"
+}
+
 stage_site_from_dist() {
   "${REPO_ROOT}/scripts/rebuild.sh" --stage-only
 }
@@ -405,3 +570,4 @@ if [[ "${SKIP_COMMIT}" -eq 0 ]]; then
 fi
 
 publish_pages_branch
+reconcile_with_retry
