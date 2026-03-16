@@ -26,6 +26,7 @@ require_cmd nvchecker
 require_cmd curl
 
 mkdir -p -- "$(dirname -- "${AUR_NVCHECKER_TOML}")" "$(dirname -- "${UPDATES_JSON}")"
+mkdir -p -- "${REPO_ROOT}/work"
 
 srcinfo_from_dir() {
   local pkg_dir="$1"
@@ -42,16 +43,16 @@ version_from_srcinfo() {
   local srcinfo_text="$1"
   local epoch pkgver pkgrel
 
-  epoch="$(awk -F' = ' '$1=="epoch"{print $2; exit}' <<<"${srcinfo_text}" || true)"
-  pkgver="$(awk -F' = ' '$1=="pkgver"{print $2; exit}' <<<"${srcinfo_text}")"
-  pkgrel="$(awk -F' = ' '$1=="pkgrel"{print $2; exit}' <<<"${srcinfo_text}")"
+  epoch="$(awk -F' = ' '{gsub(/^[[:space:]]+|[[:space:]]+$/, "", $1); gsub(/^[[:space:]]+|[[:space:]]+$/, "", $2)} $1=="epoch"{print $2; exit}' <<<"${srcinfo_text}" || true)"
+  pkgver="$(awk -F' = ' '{gsub(/^[[:space:]]+|[[:space:]]+$/, "", $1); gsub(/^[[:space:]]+|[[:space:]]+$/, "", $2)} $1=="pkgver"{print $2; exit}' <<<"${srcinfo_text}")"
+  pkgrel="$(awk -F' = ' '{gsub(/^[[:space:]]+|[[:space:]]+$/, "", $1); gsub(/^[[:space:]]+|[[:space:]]+$/, "", $2)} $1=="pkgrel"{print $2; exit}' <<<"${srcinfo_text}")"
 
   [[ -n "${pkgver}" && -n "${pkgrel}" ]] || die "failed to parse pkgver/pkgrel from .SRCINFO"
 
   if [[ -n "${epoch}" && "${epoch}" != "0" ]]; then
     printf '%s:%s-%s\n' "${epoch}" "${pkgver}" "${pkgrel}"
   else
-    printf '%s-%s\n' "${pkgver}-${pkgrel}"
+    printf '%s-%s\n' "${pkgver}" "${pkgrel}"
   fi
 }
 
@@ -62,7 +63,7 @@ add_srcinfo_versions() {
   local -a pkgnames=()
 
   version="$(version_from_srcinfo "${srcinfo_text}")"
-  mapfile -t pkgnames < <(awk -F' = ' '$1=="pkgname"{print $2}' <<<"${srcinfo_text}" | sort -u)
+  mapfile -t pkgnames < <(awk -F' = ' '{gsub(/^[[:space:]]+|[[:space:]]+$/, "", $1); gsub(/^[[:space:]]+|[[:space:]]+$/, "", $2)} $1=="pkgname"{print $2}' <<<"${srcinfo_text}" | sort -u)
   for pkgname in "${pkgnames[@]}"; do
     versions_ref="$(jq -c --arg pkg "${pkgname}" --arg ver "${version}" '. + {($pkg): $ver}' <<<"${versions_ref}")"
   done

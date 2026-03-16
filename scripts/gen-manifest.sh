@@ -39,6 +39,8 @@ read_extra_packages() {
   done <"${EXTRA_LIST_FILE}"
 }
 
+AUR_RPC_URL="${AUR_RPC_URL:-https://aur.archlinux.org/rpc/v5/info}"
+
 fetch_aur_info_batches() {
   local -a pkgs=("$@")
   local total index end pkg aur_json
@@ -59,28 +61,26 @@ fetch_aur_info_batches() {
       --retry-all-errors
       --connect-timeout 10
       --max-time 30
-      --data-urlencode "v=5"
-      --data-urlencode "type=info"
     )
 
     for pkg in "${pkgs[@]:index:end-index}"; do
       curl_args+=(--data-urlencode "arg[]=${pkg}")
     done
 
-    aur_json="$(curl "${curl_args[@]}" "https://aur.archlinux.org/rpc/" || true)"
+    aur_json="$(curl "${curl_args[@]}" "${AUR_RPC_URL}" || true)"
     if [[ -z "${aur_json}" ]]; then
       printf '%s\n' "${pkgs[@]:index:end-index}"
       return 1
     fi
 
     combined="$(
-      jq -c \
+      jq -nc \
         --argjson old "${combined}" \
         --argjson batch "${aur_json}" \
         '
         $old + (
           ($batch.results // [])
-          | map({(.Name): .Version})
+          | map(select(.Name != null and .Version != null) | {(.Name): .Version})
           | add // {}
         )
         '
@@ -113,9 +113,9 @@ add_srcinfo_packages() {
   local srcinfo_text="$2"
 
   local epoch pkgver pkgrel version
-  epoch="$(awk -F' = ' '$1=="epoch"{print $2; exit}' <<<"${srcinfo_text}" || true)"
-  pkgver="$(awk -F' = ' '$1=="pkgver"{print $2; exit}' <<<"${srcinfo_text}")"
-  pkgrel="$(awk -F' = ' '$1=="pkgrel"{print $2; exit}' <<<"${srcinfo_text}")"
+  epoch="$(awk -F' = ' '{gsub(/^[[:space:]]+|[[:space:]]+$/, "", $1); gsub(/^[[:space:]]+|[[:space:]]+$/, "", $2)} $1=="epoch"{print $2; exit}' <<<"${srcinfo_text}" || true)"
+  pkgver="$(awk -F' = ' '{gsub(/^[[:space:]]+|[[:space:]]+$/, "", $1); gsub(/^[[:space:]]+|[[:space:]]+$/, "", $2)} $1=="pkgver"{print $2; exit}' <<<"${srcinfo_text}")"
+  pkgrel="$(awk -F' = ' '{gsub(/^[[:space:]]+|[[:space:]]+$/, "", $1); gsub(/^[[:space:]]+|[[:space:]]+$/, "", $2)} $1=="pkgrel"{print $2; exit}' <<<"${srcinfo_text}")"
 
   if [[ -z "${pkgver}" || -z "${pkgrel}" ]]; then
     die "failed to parse pkgver/pkgrel from .SRCINFO"
@@ -128,7 +128,7 @@ add_srcinfo_packages() {
   fi
 
   local -a pkgnames=()
-  mapfile -t pkgnames < <(awk -F' = ' '$1=="pkgname"{print $2}' <<<"${srcinfo_text}" | sort -u)
+  mapfile -t pkgnames < <(awk -F' = ' '{gsub(/^[[:space:]]+|[[:space:]]+$/, "", $1); gsub(/^[[:space:]]+|[[:space:]]+$/, "", $2)} $1=="pkgname"{print $2}' <<<"${srcinfo_text}" | sort -u)
   if [[ "${#pkgnames[@]}" -eq 0 ]]; then
     die "failed to parse pkgname entries from .SRCINFO"
   fi

@@ -17,7 +17,7 @@ EXTRA_LIST_FILE="${EXTRA_LIST_FILE:-${REPO_ROOT}/package-lists/access-os-extra.t
 PKGBUILDS_DIR="${PKGBUILDS_DIR:-${REPO_ROOT}/pkgbuilds}"
 REMOVED_AUR_JSON="${REMOVED_AUR_JSON:-${REPO_ROOT}/metadata/removed-from-aur.json}"
 REMOVED_AUR_TXT="${REMOVED_AUR_TXT:-${REPO_ROOT}/metadata/removed-from-aur.txt}"
-AUR_RPC_URL="${AUR_RPC_URL:-https://aur.archlinux.org/rpc/}"
+AUR_RPC_URL="${AUR_RPC_URL:-https://aur.archlinux.org/rpc/v5/info}"
 
 require_cmd jq
 require_cmd curl
@@ -44,9 +44,9 @@ version_from_srcinfo() {
   local srcinfo_text="$1"
   local epoch pkgver pkgrel
 
-  epoch="$(awk -F' = ' '$1=="epoch"{print $2; exit}' <<<"${srcinfo_text}" || true)"
-  pkgver="$(awk -F' = ' '$1=="pkgver"{print $2; exit}' <<<"${srcinfo_text}")"
-  pkgrel="$(awk -F' = ' '$1=="pkgrel"{print $2; exit}' <<<"${srcinfo_text}")"
+  epoch="$(awk -F' = ' '{gsub(/^[[:space:]]+|[[:space:]]+$/, "", $1); gsub(/^[[:space:]]+|[[:space:]]+$/, "", $2)} $1=="epoch"{print $2; exit}' <<<"${srcinfo_text}" || true)"
+  pkgver="$(awk -F' = ' '{gsub(/^[[:space:]]+|[[:space:]]+$/, "", $1); gsub(/^[[:space:]]+|[[:space:]]+$/, "", $2)} $1=="pkgver"{print $2; exit}' <<<"${srcinfo_text}")"
+  pkgrel="$(awk -F' = ' '{gsub(/^[[:space:]]+|[[:space:]]+$/, "", $1); gsub(/^[[:space:]]+|[[:space:]]+$/, "", $2)} $1=="pkgrel"{print $2; exit}' <<<"${srcinfo_text}")"
 
   if [[ -z "${pkgver}" || -z "${pkgrel}" ]]; then
     die "failed to parse pkgver/pkgrel from .SRCINFO"
@@ -103,8 +103,6 @@ fetch_aur_info_batches() {
       --retry-all-errors
       --connect-timeout 10
       --max-time 30
-      --data-urlencode "v=5"
-      --data-urlencode "type=info"
     )
 
     for pkg in "${pkgs[@]:index:end-index}"; do
@@ -118,13 +116,13 @@ fetch_aur_info_batches() {
     fi
 
     combined="$(
-      jq -c \
+      jq -nc \
         --argjson old "${combined}" \
         --argjson batch "${aur_json}" \
         '
         $old + (
           ($batch.results // [])
-          | map({(.Name): .Version})
+          | map(select(.Name != null and .Version != null) | {(.Name): .Version})
           | add // {}
         )
         '

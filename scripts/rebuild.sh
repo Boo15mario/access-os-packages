@@ -218,7 +218,7 @@ should_skip_core_pkgbuild() {
   [[ "${desired_manifest_available}" == "1" && "${published_manifest_available}" == "1" ]] || return 1
 
   srcinfo_text="$(srcinfo_from_dir "${pkg_dir}")" || return 1
-  mapfile -t pkgnames < <(awk -F' = ' '$1=="pkgname"{print $2}' <<<"${srcinfo_text}" | sort -u)
+  mapfile -t pkgnames < <(awk -F' = ' '{gsub(/^[[:space:]]+|[[:space:]]+$/, "", $1); gsub(/^[[:space:]]+|[[:space:]]+$/, "", $2)} $1=="pkgname"{print $2}' <<<"${srcinfo_text}" | sort -u)
   [[ "${#pkgnames[@]}" -gt 0 ]] || return 1
 
   desired_version="$(manifest_version "${desired_manifest}" "${CORE_REPO}" "${pkgnames[0]}")"
