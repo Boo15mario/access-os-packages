@@ -254,6 +254,63 @@ copy_repo_db_to_pages() {
   cp -f "${repo_dir}/${repo}.files.tar.gz" "${pages_dir}/${repo}.files"
 }
 
+local_repo_versions_from_dist() {
+  local repo="$1"
+  local repo_dir="${REPO_ROOT}/dist/${repo}/${ARCH}"
+  local db_file="${repo_dir}/${repo}.db.tar.gz"
+  local tmpdir json
+
+  [[ -f "${db_file}" ]] || die "missing local repo DB for ${repo}: ${db_file}"
+
+  mkdir -p "${REPO_ROOT}/work"
+  tmpdir="$(mktemp -d "${REPO_ROOT%/}/work/local-manifest.XXXXXXXX")"
+  json='{}'
+
+  tar -xzf "${db_file}" -C "${tmpdir}"
+
+  while IFS=$'\t' read -r pkg ver; do
+    [[ -n "${pkg}" && -n "${ver}" ]] || continue
+    json="$(jq -c --arg pkg "${pkg}" --arg ver "${ver}" '. + {($pkg): $ver}' <<<"${json}")"
+  done < <(
+    find "${tmpdir}" -mindepth 2 -maxdepth 2 -type f -name desc -print0 | \
+      xargs -0 awk '
+        BEGIN { pkg=""; ver="" }
+        /^%NAME%$/ { getline; pkg=$0 }
+        /^%VERSION%$/ { getline; ver=$0 }
+        ENDFILE {
+          if (pkg != "" && ver != "") {
+            printf "%s\t%s\n", pkg, ver
+          }
+          pkg=""
+          ver=""
+        }
+      '
+  )
+
+  jq -S . <<<"${json}"
+  rm -rf -- "${tmpdir}"
+}
+
+build_manifest_from_dist() {
+  local core_json extra_json
+
+  core_json="$(local_repo_versions_from_dist "${CORE_REPO}")"
+  extra_json="$(local_repo_versions_from_dist "${EXTRA_REPO}")"
+
+  jq -n \
+    --argjson core "${core_json}" \
+    --argjson extra "${extra_json}" \
+    --arg core_repo "${CORE_REPO}" \
+    --arg extra_repo "${EXTRA_REPO}" \
+    '{
+      version: 1,
+      repos: {
+        ($core_repo): { packages: $core },
+        ($extra_repo): { packages: $extra }
+      }
+    }' | jq -S .
+}
+
 stage_repo_delta_from_files() {
   local repo="$1"
   shift
@@ -288,6 +345,8 @@ stage_repo_delta_from_files() {
 refresh_site_metadata() {
   if [[ -n "${ACCESS_OS_MANIFEST_CACHE}" && -f "${ACCESS_OS_MANIFEST_CACHE}" ]]; then
     cp -f "${ACCESS_OS_MANIFEST_CACHE}" "${REPO_ROOT}/site/manifest.json"
+  elif [[ "${PUBLISH_ONLY}" -eq 1 ]]; then
+    build_manifest_from_dist >"${REPO_ROOT}/site/manifest.json"
   else
     "${REPO_ROOT}/scripts/gen-manifest.sh" >"${REPO_ROOT}/site/manifest.json"
   fi
@@ -447,7 +506,9 @@ reconcile_with_retry() {
 }
 
 stage_site_from_dist() {
-  "${REPO_ROOT}/scripts/rebuild.sh" --stage-only
+  stage_repo_from_dist "${CORE_REPO}"
+  stage_repo_from_dist "${EXTRA_REPO}"
+  refresh_site_metadata
 }
 
 publish_pages_branch() {
