@@ -129,7 +129,8 @@ MAKEPKG_JOBS=8 ./scripts/publish-local.sh
 
 The `pkgbuilds/` directory stores saved AUR packaging snapshots automatically
 committed during local publishing after each successful AUR package build. These snapshots are
-used only when a package is no longer available from AUR.
+used only when a package is no longer available from AUR. The saved snapshots
+keep packaging files only; downloaded source payloads are excluded.
 
 ## Removed AUR tracking
 

@@ -383,23 +383,44 @@ makepkg_with_pgp_retry() {
   save_pkgbuild_snapshot() {
     local pkg_dir="$1"
     local save_dir="$2"
-    local item
+    local item rel_path
 
     rm -rf -- "${save_dir}"
     mkdir -p -- "${save_dir}"
 
+    if [[ -d "${pkg_dir}/.git" ]]; then
+      while IFS= read -r -d '' rel_path; do
+        mkdir -p -- "${save_dir}/$(dirname -- "${rel_path}")"
+        cp -a -- "${pkg_dir}/${rel_path}" "${save_dir}/${rel_path}"
+      done < <(git -C "${pkg_dir}" ls-files -z)
+      return 0
+    fi
+
     (
       cd "${pkg_dir}"
-      shopt -s dotglob nullglob
-      for item in * .*; do
-        case "${item}" in
-          .|..|.git|src|pkg) continue ;;
-        esac
-        case "${item}" in
-          *.pkg.tar.*|*.src.tar.*|*.log) continue ;;
-        esac
-        cp -a -- "${item}" "${save_dir}/"
-      done
+      while IFS= read -r -d '' item; do
+        rel_path="${item#./}"
+        mkdir -p -- "${save_dir}/$(dirname -- "${rel_path}")"
+        cp -a -- "${item}" "${save_dir}/${rel_path}"
+      done < <(
+        find . \
+          \( -path './.git' -o -path './src' -o -path './pkg' \) -prune -o \
+          -type f \
+          ! -name '*.pkg.tar.*' \
+          ! -name '*.src.tar.*' \
+          ! -name '*.log' \
+          ! -name '*.tar' \
+          ! -name '*.tar.*' \
+          ! -name '*.zip' \
+          ! -name '*.7z' \
+          ! -name '*.iso' \
+          ! -name '*.img' \
+          ! -name '*.bin' \
+          ! -name '*.exe' \
+          ! -name '*.msi' \
+          ! -size +10M \
+          -print0
+      )
     )
   }
 
