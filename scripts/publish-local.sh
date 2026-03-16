@@ -41,6 +41,7 @@ CORE_REPO="${CORE_REPO:-access-os-core}"
 EXTRA_REPO="${EXTRA_REPO:-access-os-extra}"
 PAGES_BRANCH="${PAGES_BRANCH:-gh-pages}"
 REMOTE_NAME="${REMOTE_NAME:-origin}"
+ACCESS_OS_MANIFEST_CACHE="${ACCESS_OS_MANIFEST_CACHE:-}"
 
 BUILD_ONLY=0
 PUBLISH_ONLY=0
@@ -285,7 +286,11 @@ stage_repo_delta_from_files() {
 }
 
 refresh_site_metadata() {
-  "${REPO_ROOT}/scripts/gen-manifest.sh" >"${REPO_ROOT}/site/manifest.json"
+  if [[ -n "${ACCESS_OS_MANIFEST_CACHE}" && -f "${ACCESS_OS_MANIFEST_CACHE}" ]]; then
+    cp -f "${ACCESS_OS_MANIFEST_CACHE}" "${REPO_ROOT}/site/manifest.json"
+  else
+    "${REPO_ROOT}/scripts/gen-manifest.sh" >"${REPO_ROOT}/site/manifest.json"
+  fi
   {
     echo "Built at: $(date -u +%Y-%m-%dT%H:%M:%SZ)"
     if git -C "${REPO_ROOT}" rev-parse --is-inside-work-tree >/dev/null 2>&1; then

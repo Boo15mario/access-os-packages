@@ -70,6 +70,7 @@ MAKEPKG_JOBS_MAX="${MAKEPKG_JOBS_MAX:-15}"
 ACCESS_OS_INCREMENTAL_PUBLISH="${ACCESS_OS_INCREMENTAL_PUBLISH:-0}"
 ACCESS_OS_INCREMENTAL_NO_PUSH="${ACCESS_OS_INCREMENTAL_NO_PUSH:-0}"
 ACCESS_OS_PUBLISH_HELPER="${ACCESS_OS_PUBLISH_HELPER:-${REPO_ROOT}/scripts/publish-local.sh}"
+ACCESS_OS_MANIFEST_CACHE="${ACCESS_OS_MANIFEST_CACHE:-}"
 
 MAKEPKG_DLAGENTS=(
   "https::/usr/bin/curl --http1.1 -qgLC - --retry ${DOWNLOAD_HTTP_RETRIES} --retry-delay ${DOWNLOAD_HTTP_RETRY_DELAY} --retry-all-errors --fail -o %o %u"
@@ -126,14 +127,17 @@ load_skip_manifests() {
     return 0
   fi
 
-  if desired_manifest_raw="$("${REPO_ROOT}/scripts/gen-manifest.sh" 2>/dev/null)"; then
+  if desired_manifest_raw="$("${REPO_ROOT}/scripts/gen-manifest.sh")"; then
     if desired_manifest="$(jq -S . <<<"${desired_manifest_raw}" 2>/dev/null)"; then
       desired_manifest_available=1
+      if [[ -n "${ACCESS_OS_MANIFEST_CACHE}" ]]; then
+        printf '%s\n' "${desired_manifest}" >"${ACCESS_OS_MANIFEST_CACHE}"
+      fi
     else
-      echo "Warning: desired manifest is invalid; rebuilding all packages" >&2
+      die "desired manifest is invalid"
     fi
   else
-    echo "Warning: failed to generate desired manifest for skip checks; rebuilding all packages" >&2
+    die "failed to generate desired manifest"
   fi
 
   if ! base_url="$(resolve_pages_base_url)"; then
@@ -440,11 +444,13 @@ mkdir -p "${SITE_DIR}/${CORE_REPO}/os/${ARCH}" "${SITE_DIR}/${EXTRA_REPO}/os/${A
 mkdir -p "${WORK_ROOT}"
 touch "${SITE_DIR}/.nojekyll"
 
-load_skip_manifests
-
 if [[ "${STAGE_ONLY}" != "1" ]]; then
   work_dir="$(mktemp -d "${WORK_ROOT%/}/rebuild.XXXXXXXX")"
+  ACCESS_OS_MANIFEST_CACHE="${work_dir}/desired-manifest.json"
+  export ACCESS_OS_MANIFEST_CACHE
 fi
+
+load_skip_manifests
 
 build_core() {
   local out_dir="${DIST_DIR}/${CORE_REPO}/${ARCH}"
