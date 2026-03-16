@@ -141,6 +141,7 @@ site_is_staged() {
   [[ -f "${REPO_ROOT}/site/manifest.json" ]] || return 1
   [[ -f "${REPO_ROOT}/site/${CORE_REPO}/os/${ARCH}/${CORE_REPO}.db" ]] || return 1
   [[ -f "${REPO_ROOT}/site/${EXTRA_REPO}/os/${ARCH}/${EXTRA_REPO}.db" ]] || return 1
+  jq -e '.version == 1 and (.repos | type == "object")' "${REPO_ROOT}/site/manifest.json" >/dev/null 2>&1 || return 1
 }
 
 ensure_release_tag() {
