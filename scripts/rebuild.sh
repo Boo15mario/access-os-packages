@@ -65,6 +65,9 @@ DOWNLOAD_HTTP_RETRIES="${DOWNLOAD_HTTP_RETRIES:-5}"
 DOWNLOAD_HTTP_RETRY_DELAY="${DOWNLOAD_HTTP_RETRY_DELAY:-3}"
 MAKEPKG_JOBS="${MAKEPKG_JOBS:-auto}"
 MAKEPKG_JOBS_MAX="${MAKEPKG_JOBS_MAX:-15}"
+ACCESS_OS_INCREMENTAL_PUBLISH="${ACCESS_OS_INCREMENTAL_PUBLISH:-0}"
+ACCESS_OS_INCREMENTAL_NO_PUSH="${ACCESS_OS_INCREMENTAL_NO_PUSH:-0}"
+ACCESS_OS_PUBLISH_HELPER="${ACCESS_OS_PUBLISH_HELPER:-${REPO_ROOT}/scripts/publish-local.sh}"
 
 MAKEPKG_DLAGENTS=(
   "https::/usr/bin/curl --http1.1 -qgLC - --retry ${DOWNLOAD_HTTP_RETRIES} --retry-delay ${DOWNLOAD_HTTP_RETRY_DELAY} --retry-all-errors --fail -o %o %u"
@@ -189,6 +192,49 @@ clean_dir_contents() {
   find "${resolved_dir}" -mindepth 1 -maxdepth 1 -exec rm -rf -- {} +
 }
 
+resolve_built_package_files() {
+  local pkg_dir="$1"
+  local out_dir="$2"
+  local -a package_list=()
+  local built_file
+
+  mapfile -t package_list < <(
+    cd "${pkg_dir}" && \
+    PKGDEST="${out_dir}" \
+    MAKEFLAGS="${MAKEPKG_MAKEFLAGS}" \
+    DLAGENTS=("${MAKEPKG_DLAGENTS[@]}") \
+    makepkg --packagelist
+  )
+
+  for built_file in "${package_list[@]}"; do
+    [[ -f "${built_file}" ]] || continue
+    printf '%s\n' "${built_file}"
+  done
+}
+
+publish_incrementally() {
+  local repo="$1"
+  local pkg_name="$2"
+  shift 2
+  local -a built_files=("$@")
+  local -a cmd=("${ACCESS_OS_PUBLISH_HELPER}")
+
+  [[ "${ACCESS_OS_INCREMENTAL_PUBLISH}" == "1" ]] || return 0
+
+  if [[ "${#built_files[@]}" -eq 0 ]]; then
+    die "incremental publish requested for ${pkg_name}, but no built package files were found"
+  fi
+
+  if [[ "${ACCESS_OS_INCREMENTAL_NO_PUSH}" == "1" ]]; then
+    cmd+=(--no-push)
+  fi
+
+  cmd+=(--publish-package "${repo}" --)
+
+  echo "    publishing built package(s) for ${pkg_name} to ${repo}"
+  "${cmd[@]}" "${built_files[@]}"
+}
+
 if [[ "${CLEAN_BEFORE_BUILD}" == "1" ]]; then
   if [[ "${STAGE_ONLY}" != "1" ]]; then
     clean_dir_contents "${DIST_DIR}"
@@ -208,6 +254,8 @@ fi
 build_core() {
   local out_dir="${DIST_DIR}/${CORE_REPO}/${ARCH}"
   local -a pkgbuilds=()
+  local pkg_dir pkg_name
+  local -a built_files=()
 
   if [[ -d "${REPO_ROOT}/packages/core" ]]; then
     while IFS= read -r -d '' pkgbuild; do
@@ -223,13 +271,18 @@ build_core() {
   echo "Building ${#pkgbuilds[@]} core package(s)..."
   for pkgbuild in "${pkgbuilds[@]}"; do
     pkg_dir="$(cd -- "$(dirname -- "${pkgbuild}")" && pwd)"
+    pkg_name="$(basename -- "${pkg_dir}")"
     echo "  - ${pkg_dir}"
     (
       cd "${pkg_dir}" && \
       PKGDEST="${out_dir}" \
       MAKEFLAGS="${MAKEPKG_MAKEFLAGS}" \
+      DLAGENTS=("${MAKEPKG_DLAGENTS[@]}") \
       makepkg --syncdeps --noconfirm --clean --cleanbuild --needed
     )
+
+    mapfile -t built_files < <(resolve_built_package_files "${pkg_dir}" "${out_dir}")
+    publish_incrementally "${CORE_REPO}" "${pkg_name}" "${built_files[@]}"
   done
 }
 
@@ -427,6 +480,7 @@ makepkg_with_pgp_retry() {
 
   echo "Building ${#pkgs[@]} AUR package(s)..."
   local pkgbuilds_save_dir="${REPO_ROOT}/pkgbuilds"
+  local -a built_files=()
   mkdir -p "${pkgbuilds_save_dir}"
   for pkg in "${pkgs[@]}"; do
     echo "  - ${pkg}"
@@ -464,25 +518,13 @@ makepkg_with_pgp_retry() {
       makepkg_flags=(--nodeps --noconfirm --clean --cleanbuild --needed)
     fi
     makepkg_with_pgp_retry "${pkg_dir}" "${pkg}" "${makepkg_flags[@]}"
+    mapfile -t built_files < <(resolve_built_package_files "${pkg_dir}" "${out_dir}")
 
     save_pkgbuild_snapshot "${pkg_dir}" "${pkgbuilds_save_dir}/${pkg}"
+    publish_incrementally "${EXTRA_REPO}" "${pkg}" "${built_files[@]}"
 
     if should_install_after_build "${pkg}"; then
       echo "    installing built package into build environment: ${pkg}"
-      local -a package_list=()
-      local -a built_files=()
-      local built_file
-      mapfile -t package_list < <(
-        cd "${pkg_dir}" && \
-        PKGDEST="${out_dir}" \
-        MAKEFLAGS="${MAKEPKG_MAKEFLAGS}" \
-        DLAGENTS=("${MAKEPKG_DLAGENTS[@]}") \
-        makepkg --packagelist
-      )
-      for built_file in "${package_list[@]}"; do
-        [[ -f "${built_file}" ]] || continue
-        built_files+=("${built_file}")
-      done
       if [[ "${#built_files[@]}" -eq 0 ]]; then
         die "failed to determine built package file(s) for ${pkg}"
       fi

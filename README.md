@@ -84,13 +84,18 @@ Recovery after an interrupted build:
 What `scripts/publish-local.sh` does:
 - refreshes removed-AUR tracking metadata
 - runs `scripts/rebuild.sh` on your Arch system
-- uploads package files to the moving GitHub Release tags
+- uploads package files to the moving GitHub Release tags as each package finishes building
 - commits updated `pkgbuilds/` and `metadata/` unless `--skip-commit` is used
 - pushes generated `site/` content to the `gh-pages` branch for GitHub Pages
 
 If you run `./scripts/publish-local.sh --publish-only` and `site/` is missing or
 incomplete, it will automatically regenerate the staged repo metadata from the
 existing `dist/` package artifacts before publishing.
+
+During a normal `./scripts/publish-local.sh` run, each successfully built
+package is uploaded immediately and Pages metadata is refreshed from the current
+`dist/` contents. If a later package fails, GitHub Releases and GitHub Pages
+still reflect everything that finished successfully up to that point.
 
 Local builds also harden source downloads inside `scripts/rebuild.sh` by using
 repo-local `makepkg` download settings with `curl --http1.1` and retries. This

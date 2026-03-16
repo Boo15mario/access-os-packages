@@ -47,6 +47,9 @@ PUBLISH_ONLY=0
 NO_PUSH=0
 SKIP_COMMIT=0
 PREFLIGHT_ONLY=0
+INCREMENTAL_PUBLISH_MODE=0
+INCREMENTAL_PUBLISH_REPO=""
+INCREMENTAL_PUBLISH_FILES=()
 
 while [[ $# -gt 0 ]]; do
   case "$1" in
@@ -55,6 +58,18 @@ while [[ $# -gt 0 ]]; do
     --no-push) NO_PUSH=1 ;;
     --skip-commit) SKIP_COMMIT=1 ;;
     --preflight) PREFLIGHT_ONLY=1 ;;
+    --publish-package)
+      INCREMENTAL_PUBLISH_MODE=1
+      shift
+      [[ $# -gt 0 ]] || die "--publish-package requires a repo name"
+      INCREMENTAL_PUBLISH_REPO="$1"
+      shift
+      if [[ "${1:-}" == "--" ]]; then
+        shift
+      fi
+      INCREMENTAL_PUBLISH_FILES=("$@")
+      break
+      ;;
     -h|--help)
       usage
       exit 0
@@ -101,20 +116,40 @@ site_is_staged() {
   [[ -f "${REPO_ROOT}/site/${EXTRA_REPO}/os/${ARCH}/${EXTRA_REPO}.db" ]] || return 1
 }
 
+ensure_release_tag() {
+  local repo="$1"
+  local tag="${repo}-${ARCH}"
+
+  if gh release view "${tag}" >/dev/null 2>&1; then
+    return 0
+  fi
+
+  gh release create "${tag}" \
+    --title "${tag}" \
+    --notes "Automated package assets for ${repo} (${ARCH})."
+}
+
+upload_selected_release_assets() {
+  local repo="$1"
+  shift
+  local tag="${repo}-${ARCH}"
+  local -a files=("$@")
+
+  ensure_release_tag "${repo}"
+
+  if [[ "${#files[@]}" -eq 0 ]]; then
+    echo "Info: no package files provided for ${repo}; skipping release upload"
+    return 0
+  fi
+
+  gh release upload "${tag}" "${files[@]}" --clobber
+}
+
 upload_release_assets() {
   local repo="$1"
   local repo_dir="${REPO_ROOT}/dist/${repo}/${ARCH}"
-  local tag="${repo}-${ARCH}"
   local -a files=()
   local file
-
-  if gh release view "${tag}" >/dev/null 2>&1; then
-    :
-  else
-    gh release create "${tag}" \
-      --title "${tag}" \
-      --notes "Automated package assets for ${repo} (${ARCH})."
-  fi
 
   shopt -s nullglob
   for file in "${repo_dir}/"*.pkg.tar.*; do
@@ -128,7 +163,11 @@ upload_release_assets() {
     return 0
   fi
 
-  gh release upload "${tag}" "${files[@]}" --clobber
+  upload_selected_release_assets "${repo}" "${files[@]}"
+}
+
+stage_site_from_dist() {
+  "${REPO_ROOT}/scripts/rebuild.sh" --stage-only
 }
 
 publish_pages_branch() {
@@ -186,6 +225,18 @@ commit_repo_metadata() {
   fi
 }
 
+if [[ "${INCREMENTAL_PUBLISH_MODE}" -eq 1 ]]; then
+  require_cmd git
+  require_cmd gh
+  require_cmd curl
+  require_cmd jq
+  ensure_gh_auth
+  upload_selected_release_assets "${INCREMENTAL_PUBLISH_REPO}" "${INCREMENTAL_PUBLISH_FILES[@]}"
+  stage_site_from_dist
+  publish_pages_branch
+  exit 0
+fi
+
 ensure_gh_auth
 "${REPO_ROOT}/scripts/check-builder.sh"
 if [[ "${PREFLIGHT_ONLY}" -eq 1 ]]; then
@@ -195,10 +246,16 @@ fi
 
 if [[ "${PUBLISH_ONLY}" -eq 0 ]]; then
   ensure_multilib_enabled
+  if [[ "${BUILD_ONLY}" -eq 0 ]]; then
+    export ARCH CORE_REPO EXTRA_REPO PAGES_BRANCH REMOTE_NAME
+    export ACCESS_OS_INCREMENTAL_PUBLISH=1
+    export ACCESS_OS_INCREMENTAL_NO_PUSH="${NO_PUSH}"
+    export ACCESS_OS_PUBLISH_HELPER="${REPO_ROOT}/scripts/publish-local.sh"
+  fi
   "${REPO_ROOT}/scripts/rebuild.sh"
 elif ! site_is_staged; then
   echo "Info: site/ is missing staged repo metadata; regenerating it from dist/."
-  "${REPO_ROOT}/scripts/rebuild.sh" --stage-only
+  stage_site_from_dist
 fi
 
 if [[ "${BUILD_ONLY}" -eq 1 ]]; then
@@ -206,8 +263,10 @@ if [[ "${BUILD_ONLY}" -eq 1 ]]; then
 fi
 
 ensure_publish_inputs
-upload_release_assets "${CORE_REPO}"
-upload_release_assets "${EXTRA_REPO}"
+if [[ "${PUBLISH_ONLY}" -eq 1 ]]; then
+  upload_release_assets "${CORE_REPO}"
+  upload_release_assets "${EXTRA_REPO}"
+fi
 
 if [[ "${SKIP_COMMIT}" -eq 0 ]]; then
   commit_repo_metadata
