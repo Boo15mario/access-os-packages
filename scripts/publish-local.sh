@@ -118,7 +118,7 @@ resolve_pages_base_url() {
   remote_url="$(git -C "${REPO_ROOT}" remote get-url "${REMOTE_NAME}" 2>/dev/null || true)"
   [[ -n "${remote_url}" ]] || return 1
 
-  parsed="$(sed -nE 's#^.*[:/]([^/:]+)/([^/]+)(\\.git)?$#\\1 \\2#p' <<<"${remote_url}")"
+  parsed="$(sed -nE 's#^.*[:/]([^/:]+)/([^/]+)(\.git)?$#\1 \2#p' <<<"${remote_url}")"
   [[ -n "${parsed}" ]] || return 1
 
   owner="${parsed%% *}"
