@@ -544,9 +544,9 @@ ensure_gh_auth
 if [[ "${PREFLIGHT_ONLY}" -eq 1 ]]; then
   exit 0
 fi
-"${REPO_ROOT}/scripts/sync-removed-from-aur.sh"
 
 if [[ "${PUBLISH_ONLY}" -eq 0 ]]; then
+  "${REPO_ROOT}/scripts/sync-removed-from-aur.sh"
   ensure_multilib_enabled
   if [[ "${BUILD_ONLY}" -eq 0 ]]; then
     export ARCH CORE_REPO EXTRA_REPO PAGES_BRANCH REMOTE_NAME
