@@ -170,25 +170,14 @@ stage_repo_from_dist() {
   local repo="$1"
   local repo_dir="${REPO_ROOT}/dist/${repo}/${ARCH}"
   local pages_dir="${REPO_ROOT}/site/${repo}/os/${ARCH}"
-  local f new
+  local f
 
   mkdir -p "${pages_dir}"
 
   (
     cd "${repo_dir}"
 
-    shopt -s nullglob
-    for f in *.pkg.tar.*; do
-      [[ "${f}" == *.sig ]] && continue
-      if [[ "${f}" == *:* ]]; then
-        new="${f//:/.}"
-        if [[ -e "${new}" ]]; then
-          die "cannot rename ${f} -> ${new}: destination already exists"
-        fi
-        mv -f -- "${f}" "${new}"
-      fi
-    done
-    shopt -u nullglob
+    normalize_repo_package_filenames
 
     shopt -s nullglob
     local -a pkgs=()
@@ -211,6 +200,64 @@ stage_repo_from_dist() {
   )
 }
 
+normalize_repo_package_filenames() {
+  local f new
+
+  shopt -s nullglob
+  for f in *.pkg.tar.*; do
+    [[ "${f}" == *.sig ]] && continue
+    if [[ "${f}" == *:* ]]; then
+      new="${f//:/.}"
+      if [[ -e "${new}" ]]; then
+        die "cannot rename ${f} -> ${new}: destination already exists"
+      fi
+      mv -f -- "${f}" "${new}"
+    fi
+  done
+  shopt -u nullglob
+}
+
+copy_repo_db_to_pages() {
+  local repo="$1"
+  local repo_dir="${REPO_ROOT}/dist/${repo}/${ARCH}"
+  local pages_dir="${REPO_ROOT}/site/${repo}/os/${ARCH}"
+
+  mkdir -p "${pages_dir}"
+  cp -f "${repo_dir}/${repo}.db.tar.gz" "${pages_dir}/${repo}.db"
+  cp -f "${repo_dir}/${repo}.files.tar.gz" "${pages_dir}/${repo}.files"
+}
+
+stage_repo_delta_from_files() {
+  local repo="$1"
+  shift
+  local repo_dir="${REPO_ROOT}/dist/${repo}/${ARCH}"
+  local -a files=("$@")
+  local file base_name normalized_name
+  local -a repo_add_files=()
+
+  (
+    cd "${repo_dir}"
+    normalize_repo_package_filenames
+
+    if [[ ! -f "${repo}.db.tar.gz" || ! -f "${repo}.files.tar.gz" ]]; then
+      tar -czf "${repo}.db.tar.gz" --files-from /dev/null
+      tar -czf "${repo}.files.tar.gz" --files-from /dev/null
+    fi
+
+    for file in "${files[@]}"; do
+      base_name="$(basename -- "${file}")"
+      normalized_name="${base_name//:/.}"
+      [[ -f "${normalized_name}" ]] || die "delta repo update is missing package file: ${normalized_name}"
+      repo_add_files+=("${normalized_name}")
+    done
+
+    [[ "${#repo_add_files[@]}" -gt 0 ]] || die "delta repo update requires at least one package file"
+    repo-add -R "${repo}.db.tar.gz" "${repo_add_files[@]}"
+  )
+
+  copy_repo_db_to_pages "${repo}"
+}
+
 refresh_site_metadata() {
   "${REPO_ROOT}/scripts/gen-manifest.sh" >"${REPO_ROOT}/site/manifest.json"
   {
@@ -223,7 +270,9 @@ refresh_site_metadata() {
 
 stage_incremental_repo_update() {
   local repo="$1"
-  stage_repo_from_dist "${repo}"
+  shift
+  local -a files=("$@")
+  stage_repo_delta_from_files "${repo}" "${files[@]}"
   refresh_site_metadata
 }
 
@@ -315,7 +364,7 @@ if [[ "${INCREMENTAL_PUBLISH_MODE}" -eq 1 ]]; then
   require_cmd jq
   ensure_gh_auth
   upload_selected_release_assets "${INCREMENTAL_PUBLISH_REPO}" "${INCREMENTAL_PUBLISH_FILES[@]}"
-  stage_incremental_repo_update "${INCREMENTAL_PUBLISH_REPO}"
+  stage_incremental_repo_update "${INCREMENTAL_PUBLISH_REPO}" "${INCREMENTAL_PUBLISH_FILES[@]}"
   publish_pages_branch
   exit 0
 fi
