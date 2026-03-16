@@ -1,0 +1,25 @@
+{
+  "repos": {
+    "access-os-core": {
+      "packages": {}
+    },
+    "access-os-extra": {
+      "packages": {
+        "aic94xx-firmware": "30-10",
+        "ast-firmware": "501-1",
+        "mkinitcpio-firmware": "1.6.0-1",
+        "neofetch": "7.1.0-2",
+        "pacman-cleanup-hook": "1.1-1",
+        "reflector-pacman-hook-git": "r105.acc2161-1",
+        "reiserfsprogs": "3.6.27-6",
+        "samba-support": "1-8",
+        "ttf-mac-fonts": "20100901.134-1",
+        "ttf-ms-fonts": "2.0-12",
+        "ttf-tamil": "1.0-3",
+        "upd72020x-fw": "1:1.0.0-3",
+        "wd719x-firmware": "1-9"
+      }
+    }
+  },
+  "version": 1
+}
