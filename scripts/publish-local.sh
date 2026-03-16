@@ -174,6 +174,28 @@ publish_pages_branch() {
   local pages_dir="${REPO_ROOT}/site"
   local worktree_dir
   mkdir -p "${REPO_ROOT}/work"
+
+  cleanup_stale_pages_worktrees() {
+    local current_path=""
+    while IFS= read -r line; do
+      if [[ "${line}" == worktree\ * ]]; then
+        current_path="${line#worktree }"
+        continue
+      fi
+      if [[ -n "${line}" ]]; then
+        continue
+      fi
+      if [[ "${current_path}" == "${REPO_ROOT}"/work/pages.* ]]; then
+        git -C "${REPO_ROOT}" worktree remove --force "${current_path}" >/dev/null 2>&1 || true
+        rm -rf -- "${current_path}"
+      fi
+      current_path=""
+    done < <(git -C "${REPO_ROOT}" worktree list --porcelain; printf '\n')
+
+    git -C "${REPO_ROOT}" worktree prune >/dev/null 2>&1 || true
+  }
+
+  cleanup_stale_pages_worktrees
   worktree_dir="$(mktemp -d "${REPO_ROOT%/}/work/pages.XXXXXXXX")"
 
   cleanup_pages_worktree() {
