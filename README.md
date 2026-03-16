@@ -119,6 +119,25 @@ MAKEPKG_JOBS=5 ./scripts/rebuild.sh
 MAKEPKG_JOBS=8 ./scripts/publish-local.sh
 ```
 
+## Update Tracking
+
+This repo also includes `nvchecker`-style update tracking for both:
+- local/custom package definitions via `metadata/nvchecker/local.toml`
+- AUR packages from `package-lists/access-os-extra.txt`, rendered into `metadata/nvchecker/aur.toml`
+
+Run it locally with:
+
+```bash
+./scripts/check-upstream-updates.sh
+```
+
+Outputs:
+- `metadata/upstream-updates.json`
+- `metadata/upstream-updates.md`
+
+GitHub Actions also runs a scheduled update-report workflow in
+`.github/workflows/check-upstream-updates.yml`.
+
 ## Adding packages
 
 ### AUR (`access-os-extra`)

@@ -1,0 +1,45 @@
+name: Check upstream updates
+
+on:
+  workflow_dispatch:
+  schedule:
+    - cron: "0 */6 * * *"
+  push:
+    paths:
+      - ".github/workflows/check-upstream-updates.yml"
+      - "scripts/check-upstream-updates.sh"
+      - "metadata/nvchecker/**"
+      - "package-lists/**"
+      - "packages/**"
+      - "pkgbuilds/**"
+      - "README.md"
+
+permissions:
+  contents: read
+
+jobs:
+  updates:
+    runs-on: ubuntu-latest
+    container: archlinux:latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Install dependencies
+        run: |
+          set -euo pipefail
+          pacman-key --init
+          pacman-key --populate archlinux
+          pacman -Syu --noconfirm --needed archlinux-keyring base-devel git curl jq nvchecker
+
+      - name: Check upstream updates
+        run: ./scripts/check-upstream-updates.sh
+
+      - name: Upload update reports
+        uses: actions/upload-artifact@v4
+        with:
+          name: upstream-updates
+          path: |
+            metadata/nvchecker/aur.toml
+            metadata/upstream-updates.json
+            metadata/upstream-updates.md
