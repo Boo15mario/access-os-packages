@@ -22,6 +22,8 @@ AUR_RPC_URL="${AUR_RPC_URL:-https://aur.archlinux.org/rpc/}"
 require_cmd jq
 require_cmd curl
 
+AUR_BATCH_SIZE="${AUR_BATCH_SIZE:-50}"
+
 srcinfo_from_dir() {
   local pkg_dir="$1"
 
@@ -69,33 +71,87 @@ new_json='[]'
 aur_missing=()
 aur_query_failed=()
 
-if [[ -f "${EXTRA_LIST_FILE}" ]]; then
+read_extra_packages() {
+  [[ -f "${EXTRA_LIST_FILE}" ]] || return 0
+
   while IFS= read -r line; do
     pkg="${line%%#*}"
     pkg="${pkg#"${pkg%%[![:space:]]*}"}"
     pkg="${pkg%"${pkg##*[![:space:]]}"}"
     [[ -z "${pkg}" ]] && continue
+    printf '%s\n' "${pkg}"
+  done <"${EXTRA_LIST_FILE}"
+}
 
-    aur_json="$(
-      curl -fsSLG \
-        --retry 3 \
-        --retry-all-errors \
-        --connect-timeout 10 \
-        --max-time 30 \
-        --data-urlencode "v=5" \
-        --data-urlencode "type=info" \
-        --data-urlencode "arg[]=${pkg}" \
-        "${AUR_RPC_URL}" || true
-    )"
+fetch_aur_info_batches() {
+  local -a pkgs=("$@")
+  local total index end pkg aur_json
+  local combined='{}'
 
-    if [[ -z "${aur_json}" ]]; then
-      aur_query_failed+=("${pkg}")
-      continue
+  total="${#pkgs[@]}"
+  index=0
+
+  while [[ "${index}" -lt "${total}" ]]; do
+    end=$(( index + AUR_BATCH_SIZE ))
+    if [[ "${end}" -gt "${total}" ]]; then
+      end="${total}"
     fi
 
-    resultcount="$(jq -r '.resultcount // 0' <<<"${aur_json}")"
-    ver="$(jq -r '.results[0].Version // empty' <<<"${aur_json}")"
-    if [[ "${resultcount}" != "0" && -n "${ver}" && "${ver}" != "null" ]]; then
+    local -a curl_args=(
+      -fsSLG
+      --retry 3
+      --retry-all-errors
+      --connect-timeout 10
+      --max-time 30
+      --data-urlencode "v=5"
+      --data-urlencode "type=info"
+    )
+
+    for pkg in "${pkgs[@]:index:end-index}"; do
+      curl_args+=(--data-urlencode "arg[]=${pkg}")
+    done
+
+    aur_json="$(curl "${curl_args[@]}" "${AUR_RPC_URL}" || true)"
+    if [[ -z "${aur_json}" ]]; then
+      printf '%s\n' "${pkgs[@]:index:end-index}"
+      return 1
+    fi
+
+    combined="$(
+      jq -c \
+        --argjson old "${combined}" \
+        --argjson batch "${aur_json}" \
+        '
+        $old + (
+          ($batch.results // [])
+          | map({(.Name): .Version})
+          | add // {}
+        )
+        '
+    )"
+
+    index="${end}"
+  done
+
+  jq -S . <<<"${combined}"
+}
+
+mapfile -t extra_packages < <(read_extra_packages)
+aur_versions='{}'
+if [[ "${#extra_packages[@]}" -gt 0 ]]; then
+  set +e
+  aur_versions="$(fetch_aur_info_batches "${extra_packages[@]}")"
+  aur_fetch_rc="$?"
+  set -e
+  if [[ "${aur_fetch_rc}" -ne 0 ]]; then
+    mapfile -t aur_query_failed < <(printf '%s\n' "${aur_versions}")
+  fi
+fi
+
+if [[ "${#extra_packages[@]}" -gt 0 && "${#aur_query_failed[@]}" -eq 0 ]]; then
+  for pkg in "${extra_packages[@]}"; do
+    ver="$(jq -r --arg pkg "${pkg}" '.[$pkg] // empty' <<<"${aur_versions}")"
+    if [[ -n "${ver}" && "${ver}" != "null" ]]; then
       continue
     fi
 
@@ -130,7 +186,7 @@ if [[ -f "${EXTRA_LIST_FILE}" ]]; then
         }'
     )"
     new_json="$(jq -c --argjson entry "${entry}" '. + [$entry]' <<<"${new_json}")"
-  done <"${EXTRA_LIST_FILE}"
+  done
 fi
 
 if [[ "${#aur_query_failed[@]}" -gt 0 ]]; then

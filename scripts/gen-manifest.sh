@@ -20,10 +20,77 @@ EXTRA_LIST_FILE="${EXTRA_LIST_FILE:-${REPO_ROOT}/package-lists/access-os-extra.t
 require_cmd jq
 require_cmd curl
 
+AUR_BATCH_SIZE="${AUR_BATCH_SIZE:-50}"
+
 core_packages_json='{}'
 extra_packages_json='{}'
 aur_missing=()
 aur_query_failed=()
+
+read_extra_packages() {
+  [[ -f "${EXTRA_LIST_FILE}" ]] || return 0
+
+  while IFS= read -r line; do
+    pkg="${line%%#*}"
+    pkg="${pkg#"${pkg%%[![:space:]]*}"}"
+    pkg="${pkg%"${pkg##*[![:space:]]}"}"
+    [[ -z "${pkg}" ]] && continue
+    printf '%s\n' "${pkg}"
+  done <"${EXTRA_LIST_FILE}"
+}
+
+fetch_aur_info_batches() {
+  local -a pkgs=("$@")
+  local total index end pkg aur_json
+  local combined='{}'
+
+  total="${#pkgs[@]}"
+  index=0
+
+  while [[ "${index}" -lt "${total}" ]]; do
+    end=$(( index + AUR_BATCH_SIZE ))
+    if [[ "${end}" -gt "${total}" ]]; then
+      end="${total}"
+    fi
+
+    local -a curl_args=(
+      -fsSLG
+      --retry 3
+      --retry-all-errors
+      --connect-timeout 10
+      --max-time 30
+      --data-urlencode "v=5"
+      --data-urlencode "type=info"
+    )
+
+    for pkg in "${pkgs[@]:index:end-index}"; do
+      curl_args+=(--data-urlencode "arg[]=${pkg}")
+    done
+
+    aur_json="$(curl "${curl_args[@]}" "https://aur.archlinux.org/rpc/" || true)"
+    if [[ -z "${aur_json}" ]]; then
+      printf '%s\n' "${pkgs[@]:index:end-index}"
+      return 1
+    fi
+
+    combined="$(
+      jq -c \
+        --argjson old "${combined}" \
+        --argjson batch "${aur_json}" \
+        '
+        $old + (
+          ($batch.results // [])
+          | map({(.Name): .Version})
+          | add // {}
+        )
+        '
+    )"
+
+    index="${end}"
+  done
+
+  jq -S . <<<"${combined}"
+}
 
 srcinfo_from_dir() {
   local pkg_dir="$1"
@@ -84,32 +151,22 @@ if [[ -d "${REPO_ROOT}/packages/core" ]]; then
 fi
 
 # access-os-extra (AUR)
-if [[ -f "${EXTRA_LIST_FILE}" ]]; then
-  while IFS= read -r line; do
-    pkg="${line%%#*}"
-    pkg="${pkg#"${pkg%%[![:space:]]*}"}"
-    pkg="${pkg%"${pkg##*[![:space:]]}"}"
-    [[ -z "${pkg}" ]] && continue
+mapfile -t extra_packages < <(read_extra_packages)
+aur_versions='{}'
+if [[ "${#extra_packages[@]}" -gt 0 ]]; then
+  set +e
+  aur_versions="$(fetch_aur_info_batches "${extra_packages[@]}")"
+  aur_fetch_rc="$?"
+  set -e
+  if [[ "${aur_fetch_rc}" -ne 0 ]]; then
+    mapfile -t aur_query_failed < <(printf '%s\n' "${aur_versions}")
+  fi
+fi
 
-    aur_json="$(
-      curl -fsSLG \
-        --retry 3 \
-        --retry-all-errors \
-        --connect-timeout 10 \
-        --max-time 30 \
-        --data-urlencode "v=5" \
-        --data-urlencode "type=info" \
-        --data-urlencode "arg[]=${pkg}" \
-        "https://aur.archlinux.org/rpc/" || true
-    )"
-    if [[ -z "${aur_json}" ]]; then
-      aur_query_failed+=("${pkg}")
-      continue
-    fi
-
-    resultcount="$(jq -r '.resultcount // 0' <<<"${aur_json}")"
-    ver="$(jq -r '.results[0].Version // empty' <<<"${aur_json}")"
-    if [[ "${resultcount}" == "0" || -z "${ver}" || "${ver}" == "null" ]]; then
+if [[ "${#extra_packages[@]}" -gt 0 && "${#aur_query_failed[@]}" -eq 0 ]]; then
+  for pkg in "${extra_packages[@]}"; do
+    ver="$(jq -r --arg pkg "${pkg}" '.[$pkg] // empty' <<<"${aur_versions}")"
+    if [[ -z "${ver}" || "${ver}" == "null" ]]; then
       local_pkgbuild_dir="${REPO_ROOT}/pkgbuilds/${pkg}"
       if [[ -d "${local_pkgbuild_dir}" && -f "${local_pkgbuild_dir}/PKGBUILD" ]]; then
         echo "Warning: ${pkg} is unavailable from AUR; falling back to saved snapshot in pkgbuilds/${pkg}" >&2
@@ -122,7 +179,7 @@ if [[ -f "${EXTRA_LIST_FILE}" ]]; then
     fi
 
     extra_packages_json="$(jq -c --arg name "${pkg}" --arg ver "${ver}" '. + {($name): $ver}' <<<"${extra_packages_json}")"
-  done <"${EXTRA_LIST_FILE}"
+  done
 fi
 
 if [[ "${#aur_query_failed[@]}" -gt 0 ]]; then
