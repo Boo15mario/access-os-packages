@@ -19,6 +19,7 @@ PACKAGES=(
   git
   curl
   jq
+  nvchecker
   pacman-contrib
   devtools
   github-cli

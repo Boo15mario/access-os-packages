@@ -15,6 +15,7 @@ PACKAGES=(
   git
   curl
   jq
+  nvchecker
   pacman-contrib
   devtools
   github-cli
@@ -49,7 +50,7 @@ check_cmd() {
   fi
 }
 
-for cmd in git curl jq gh makepkg repo-add; do
+for cmd in git curl jq nvchecker gh makepkg repo-add; do
   check_cmd "${cmd}"
 done
 
