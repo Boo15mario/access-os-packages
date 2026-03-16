@@ -62,12 +62,17 @@ jobs:
                 printf "\n[multilib]\nInclude = /etc/pacman.d/mirrorlist\n" >>/etc/pacman.conf
               fi
               pacman -Syu --noconfirm --needed archlinux-keyring base-devel git curl jq pacman-contrib
-              export REMOVED_AUR_JSON=/tmp/removed-from-aur.json
-              export REMOVED_AUR_TXT=/tmp/removed-from-aur.txt
-              ./scripts/sync-removed-from-aur.sh
-              ./scripts/check-updates.sh >/tmp/check-updates.log
-              ./scripts/rebuild.sh --dry-run
-              ./scripts/gen-manifest.sh >/tmp/manifest.json
+              useradd -m validator
+              chown -R validator:validator /work
+              su - validator -c "
+                cd /work
+                export REMOVED_AUR_JSON=/tmp/removed-from-aur.json
+                export REMOVED_AUR_TXT=/tmp/removed-from-aur.txt
+                ./scripts/sync-removed-from-aur.sh
+                ./scripts/check-updates.sh >/tmp/check-updates.log
+                ./scripts/rebuild.sh --dry-run
+                ./scripts/gen-manifest.sh >/tmp/manifest.json
+              "
               jq -e ".version == 1 and (.repos | type == \"object\")" /tmp/manifest.json >/dev/null
             '
 
