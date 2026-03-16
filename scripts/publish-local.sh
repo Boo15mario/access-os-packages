@@ -166,6 +166,67 @@ upload_release_assets() {
   upload_selected_release_assets "${repo}" "${files[@]}"
 }
 
+stage_repo_from_dist() {
+  local repo="$1"
+  local repo_dir="${REPO_ROOT}/dist/${repo}/${ARCH}"
+  local pages_dir="${REPO_ROOT}/site/${repo}/os/${ARCH}"
+  local f new
+
+  mkdir -p "${pages_dir}"
+
+  (
+    cd "${repo_dir}"
+
+    shopt -s nullglob
+    for f in *.pkg.tar.*; do
+      [[ "${f}" == *.sig ]] && continue
+      if [[ "${f}" == *:* ]]; then
+        new="${f//:/.}"
+        if [[ -e "${new}" ]]; then
+          die "cannot rename ${f} -> ${new}: destination already exists"
+        fi
+        mv -f -- "${f}" "${new}"
+      fi
+    done
+    shopt -u nullglob
+
+    shopt -s nullglob
+    local -a pkgs=()
+    for f in *.pkg.tar.*; do
+      [[ "${f}" == *.sig ]] && continue
+      pkgs+=("${f}")
+    done
+    shopt -u nullglob
+
+    if [[ "${#pkgs[@]}" -gt 0 ]]; then
+      repo-add -R "${repo}.db.tar.gz" "${pkgs[@]}"
+    else
+      echo "Info: ${repo} has no packages yet; creating empty repo DB"
+      tar -czf "${repo}.db.tar.gz" --files-from /dev/null
+      tar -czf "${repo}.files.tar.gz" --files-from /dev/null
+    fi
+
+    cp -f "${repo}.db.tar.gz" "${pages_dir}/${repo}.db"
+    cp -f "${repo}.files.tar.gz" "${pages_dir}/${repo}.files"
+  )
+}
+
+refresh_site_metadata() {
+  "${REPO_ROOT}/scripts/gen-manifest.sh" >"${REPO_ROOT}/site/manifest.json"
+  {
+    echo "Built at: $(date -u +%Y-%m-%dT%H:%M:%SZ)"
+    if git -C "${REPO_ROOT}" rev-parse --is-inside-work-tree >/dev/null 2>&1; then
+      echo "Commit: $(git -C "${REPO_ROOT}" rev-parse HEAD)"
+    fi
+  } >"${REPO_ROOT}/site/BUILD_INFO.txt"
+}
+
+stage_incremental_repo_update() {
+  local repo="$1"
+  stage_repo_from_dist "${repo}"
+  refresh_site_metadata
+}
+
 stage_site_from_dist() {
   "${REPO_ROOT}/scripts/rebuild.sh" --stage-only
 }
@@ -254,7 +315,7 @@ if [[ "${INCREMENTAL_PUBLISH_MODE}" -eq 1 ]]; then
   require_cmd jq
   ensure_gh_auth
   upload_selected_release_assets "${INCREMENTAL_PUBLISH_REPO}" "${INCREMENTAL_PUBLISH_FILES[@]}"
-  stage_site_from_dist
+  stage_incremental_repo_update "${INCREMENTAL_PUBLISH_REPO}"
   publish_pages_branch
   exit 0
 fi
