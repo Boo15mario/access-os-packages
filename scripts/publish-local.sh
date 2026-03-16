@@ -95,6 +95,12 @@ ensure_publish_inputs() {
   done
 }
 
+site_is_staged() {
+  [[ -f "${REPO_ROOT}/site/manifest.json" ]] || return 1
+  [[ -f "${REPO_ROOT}/site/${CORE_REPO}/os/${ARCH}/${CORE_REPO}.db" ]] || return 1
+  [[ -f "${REPO_ROOT}/site/${EXTRA_REPO}/os/${ARCH}/${EXTRA_REPO}.db" ]] || return 1
+}
+
 upload_release_assets() {
   local repo="$1"
   local repo_dir="${REPO_ROOT}/dist/${repo}/${ARCH}"
@@ -190,6 +196,9 @@ fi
 if [[ "${PUBLISH_ONLY}" -eq 0 ]]; then
   ensure_multilib_enabled
   "${REPO_ROOT}/scripts/rebuild.sh"
+elif ! site_is_staged; then
+  echo "Info: site/ is missing staged repo metadata; regenerating it from dist/."
+  "${REPO_ROOT}/scripts/rebuild.sh" --stage-only
 fi
 
 if [[ "${BUILD_ONLY}" -eq 1 ]]; then

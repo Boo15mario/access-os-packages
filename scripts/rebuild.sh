@@ -11,7 +11,7 @@ REPO_ROOT="$(cd -- "${SCRIPT_DIR}/.." && pwd)"
 
 usage() {
   cat <<'EOF'
-Usage: rebuild.sh [--dry-run]
+Usage: rebuild.sh [--dry-run] [--stage-only]
 
 Build packages and stage pacman repositories.
 
@@ -33,14 +33,21 @@ EOF
 }
 
 DRY_RUN=0
-if [[ "${1:-}" == "--dry-run" ]]; then
-  DRY_RUN=1
-elif [[ "${1:-}" == "-h" || "${1:-}" == "--help" ]]; then
-  usage
-  exit 0
-elif [[ $# -gt 0 ]]; then
-  die "unknown argument: $1"
-fi
+STAGE_ONLY=0
+while [[ $# -gt 0 ]]; do
+  case "$1" in
+    --dry-run) DRY_RUN=1 ;;
+    --stage-only) STAGE_ONLY=1 ;;
+    -h|--help)
+      usage
+      exit 0
+      ;;
+    *)
+      die "unknown argument: $1"
+      ;;
+  esac
+  shift
+done
 
 if [[ "$(id -u)" -eq 0 ]]; then
   die "do not run as root (makepkg refuses to run as root)"
@@ -120,10 +127,12 @@ if [[ "${DRY_RUN}" == "1" ]]; then
   echo "Work root: ${WORK_ROOT}"
   echo "Clean before build: ${CLEAN_BEFORE_BUILD}"
   echo "Makepkg jobs: ${RESOLVED_MAKEPKG_JOBS} (MAKEPKG_JOBS=${MAKEPKG_JOBS}, cap=${MAKEPKG_JOBS_MAX})"
+  echo "Stage only: ${STAGE_ONLY}"
   exit 0
 fi
 
 sudo_keepalive_pid=""
+work_dir=""
 
 stop_sudo_keepalive() {
   if [[ -n "${sudo_keepalive_pid}" ]]; then
@@ -148,8 +157,19 @@ start_sudo_keepalive() {
   sudo_keepalive_pid="$!"
 }
 
-trap stop_sudo_keepalive EXIT
-start_sudo_keepalive
+cleanup() {
+  stop_sudo_keepalive
+  if [[ -n "${work_dir}" ]]; then
+    rm -rf -- "${work_dir}"
+    work_dir=""
+  fi
+}
+
+trap cleanup EXIT
+
+if [[ "${STAGE_ONLY}" != "1" ]]; then
+  start_sudo_keepalive
+fi
 
 echo "Using makepkg jobs: ${RESOLVED_MAKEPKG_JOBS} (MAKEFLAGS=${MAKEPKG_MAKEFLAGS})"
 
@@ -170,7 +190,9 @@ clean_dir_contents() {
 }
 
 if [[ "${CLEAN_BEFORE_BUILD}" == "1" ]]; then
-  clean_dir_contents "${DIST_DIR}"
+  if [[ "${STAGE_ONLY}" != "1" ]]; then
+    clean_dir_contents "${DIST_DIR}"
+  fi
   clean_dir_contents "${SITE_DIR}"
 fi
 
@@ -179,11 +201,9 @@ mkdir -p "${SITE_DIR}/${CORE_REPO}/os/${ARCH}" "${SITE_DIR}/${EXTRA_REPO}/os/${A
 mkdir -p "${WORK_ROOT}"
 touch "${SITE_DIR}/.nojekyll"
 
-work_dir="$(mktemp -d "${WORK_ROOT%/}/rebuild.XXXXXXXX")"
-cleanup() {
-  rm -rf -- "${work_dir}"
-}
-trap cleanup EXIT
+if [[ "${STAGE_ONLY}" != "1" ]]; then
+  work_dir="$(mktemp -d "${WORK_ROOT%/}/rebuild.XXXXXXXX")"
+fi
 
 build_core() {
   local out_dir="${DIST_DIR}/${CORE_REPO}/${ARCH}"
@@ -495,8 +515,12 @@ create_repo_db() {
   )
 }
 
-build_core
-build_extra
+if [[ "${STAGE_ONLY}" == "1" ]]; then
+  echo "Stage-only mode: skipping package builds and reusing dist/ outputs."
+else
+  build_core
+  build_extra
+fi
 
 create_repo_db "${CORE_REPO}" "${DIST_DIR}/${CORE_REPO}/${ARCH}" "${SITE_DIR}/${CORE_REPO}/os/${ARCH}"
 create_repo_db "${EXTRA_REPO}" "${DIST_DIR}/${EXTRA_REPO}/${ARCH}" "${SITE_DIR}/${EXTRA_REPO}/os/${ARCH}"

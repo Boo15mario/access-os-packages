@@ -74,12 +74,23 @@ Useful modes:
 ./scripts/publish-local.sh --no-push
 ```
 
+Recovery after an interrupted build:
+
+```bash
+./scripts/rebuild.sh --stage-only
+./scripts/publish-local.sh --publish-only
+```
+
 What `scripts/publish-local.sh` does:
 - refreshes removed-AUR tracking metadata
 - runs `scripts/rebuild.sh` on your Arch system
 - uploads package files to the moving GitHub Release tags
 - commits updated `pkgbuilds/` and `metadata/` unless `--skip-commit` is used
 - pushes generated `site/` content to the `gh-pages` branch for GitHub Pages
+
+If you run `./scripts/publish-local.sh --publish-only` and `site/` is missing or
+incomplete, it will automatically regenerate the staged repo metadata from the
+existing `dist/` package artifacts before publishing.
 
 Local builds also harden source downloads inside `scripts/rebuild.sh` by using
 repo-local `makepkg` download settings with `curl --http1.1` and retries. This
