@@ -42,6 +42,8 @@ EXTRA_REPO="${EXTRA_REPO:-access-os-extra}"
 PAGES_BRANCH="${PAGES_BRANCH:-gh-pages}"
 REMOTE_NAME="${REMOTE_NAME:-origin}"
 ACCESS_OS_MANIFEST_CACHE="${ACCESS_OS_MANIFEST_CACHE:-}"
+PAGES_RECONCILE_ATTEMPTS="${PAGES_RECONCILE_ATTEMPTS:-20}"
+PAGES_RECONCILE_DELAY="${PAGES_RECONCILE_DELAY:-6}"
 
 BUILD_ONLY=0
 PUBLISH_ONLY=0
@@ -495,15 +497,28 @@ reconcile_published_state() {
 reconcile_with_retry() {
   [[ "${NO_PUSH}" -eq 0 ]] || return 0
 
-  sleep 3
-  if reconcile_published_state; then
-    return 0
-  fi
+  local attempt
+  for (( attempt = 1; attempt <= PAGES_RECONCILE_ATTEMPTS; attempt++ )); do
+    if reconcile_published_state; then
+      return 0
+    fi
+    if (( attempt < PAGES_RECONCILE_ATTEMPTS )); then
+      sleep "${PAGES_RECONCILE_DELAY}"
+    fi
+  done
 
   echo "Warning: published state mismatch detected; retrying GitHub Pages publish once" >&2
   publish_pages_branch
-  sleep 3
-  reconcile_published_state || die "published GitHub Releases and Pages metadata are still out of sync"
+  for (( attempt = 1; attempt <= PAGES_RECONCILE_ATTEMPTS; attempt++ )); do
+    if reconcile_published_state; then
+      return 0
+    fi
+    if (( attempt < PAGES_RECONCILE_ATTEMPTS )); then
+      sleep "${PAGES_RECONCILE_DELAY}"
+    fi
+  done
+
+  die "published GitHub Releases and Pages metadata are still out of sync"
 }
 
 stage_site_from_dist() {
