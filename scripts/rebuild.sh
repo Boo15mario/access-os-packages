@@ -265,6 +265,7 @@ build_extra() {
     python3-memoizedb
     python3-xcgf
     samba-support
+    system76-power
   )
 
   should_install_after_build() {
