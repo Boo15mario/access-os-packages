@@ -28,6 +28,7 @@ Environment overrides:
   DIST_DIR            (default: dist)
   SITE_DIR            (default: site)
   WORK_ROOT           (default: work)
+  REMOTE_NAME         (default: origin)
   CLEAN_BEFORE_BUILD  1=enabled (default), 0=disabled
 EOF
 }
@@ -60,6 +61,7 @@ EXTRA_LIST_FILE="${EXTRA_LIST_FILE:-${REPO_ROOT}/package-lists/access-os-extra.t
 DIST_DIR="${DIST_DIR:-${REPO_ROOT}/dist}"
 SITE_DIR="${SITE_DIR:-${REPO_ROOT}/site}"
 WORK_ROOT="${WORK_ROOT:-${REPO_ROOT}/work}"
+REMOTE_NAME="${REMOTE_NAME:-origin}"
 CLEAN_BEFORE_BUILD="${CLEAN_BEFORE_BUILD:-1}"
 DOWNLOAD_HTTP_RETRIES="${DOWNLOAD_HTTP_RETRIES:-5}"
 DOWNLOAD_HTTP_RETRY_DELAY="${DOWNLOAD_HTTP_RETRY_DELAY:-3}"
@@ -74,6 +76,197 @@ MAKEPKG_DLAGENTS=(
   "http::/usr/bin/curl --http1.1 -qgLC - --retry ${DOWNLOAD_HTTP_RETRIES} --retry-delay ${DOWNLOAD_HTTP_RETRY_DELAY} --retry-all-errors --fail -o %o %u"
   "ftp::/usr/bin/curl --http1.1 -qgLC - --retry ${DOWNLOAD_HTTP_RETRIES} --retry-delay ${DOWNLOAD_HTTP_RETRY_DELAY} --retry-all-errors --fail -o %o %u"
 )
+
+published_manifest='{}'
+desired_manifest='{}'
+published_manifest_available=0
+desired_manifest_available=0
+
+srcinfo_from_dir() {
+  local pkg_dir="$1"
+
+  if [[ -f "${pkg_dir}/.SRCINFO" ]]; then
+    cat "${pkg_dir}/.SRCINFO"
+    return 0
+  fi
+
+  (cd "${pkg_dir}" && makepkg --printsrcinfo)
+}
+
+resolve_pages_base_url() {
+  local remote_url parsed owner repo_name
+
+  if [[ -n "${PAGES_BASE_URL:-}" ]]; then
+    printf '%s\n' "${PAGES_BASE_URL%/}"
+    return 0
+  fi
+
+  if [[ -n "${GITHUB_REPOSITORY_OWNER:-}" && -n "${GITHUB_REPOSITORY:-}" ]]; then
+    repo_name="${GITHUB_REPOSITORY#*/}"
+    printf 'https://%s.github.io/%s\n' "${GITHUB_REPOSITORY_OWNER}" "${repo_name}"
+    return 0
+  fi
+
+  remote_url="$(git -C "${REPO_ROOT}" remote get-url "${REMOTE_NAME}" 2>/dev/null || true)"
+  [[ -n "${remote_url}" ]] || return 1
+
+  parsed="$(sed -nE 's#^.*[:/]([^/:]+)/([^/]+)(\.git)?$#\1 \2#p' <<<"${remote_url}")"
+  [[ -n "${parsed}" ]] || return 1
+
+  owner="${parsed%% *}"
+  repo_name="${parsed#* }"
+  repo_name="${repo_name%.git}"
+  printf 'https://%s.github.io/%s\n' "${owner}" "${repo_name}"
+}
+
+load_skip_manifests() {
+  local base_url desired_manifest_raw remote_manifest_raw
+
+  if [[ "${STAGE_ONLY}" == "1" ]]; then
+    return 0
+  fi
+
+  if desired_manifest_raw="$("${REPO_ROOT}/scripts/gen-manifest.sh" 2>/dev/null)"; then
+    if desired_manifest="$(jq -S . <<<"${desired_manifest_raw}" 2>/dev/null)"; then
+      desired_manifest_available=1
+    else
+      echo "Warning: desired manifest is invalid; rebuilding all packages" >&2
+    fi
+  else
+    echo "Warning: failed to generate desired manifest for skip checks; rebuilding all packages" >&2
+  fi
+
+  if ! base_url="$(resolve_pages_base_url)"; then
+    echo "Warning: failed to determine GitHub Pages base URL; rebuilding all packages" >&2
+    return 0
+  fi
+
+  remote_manifest_raw="$(curl -fsSL "${base_url}/manifest.json" 2>/dev/null || true)"
+  if [[ -z "${remote_manifest_raw}" ]]; then
+    echo "Warning: failed to fetch published manifest from ${base_url}/manifest.json; rebuilding all packages" >&2
+    return 0
+  fi
+
+  if published_manifest="$(jq -S . <<<"${remote_manifest_raw}" 2>/dev/null)"; then
+    published_manifest_available=1
+  else
+    echo "Warning: published manifest from ${base_url}/manifest.json is invalid; rebuilding all packages" >&2
+  fi
+}
+
+manifest_version() {
+  local manifest_json="$1"
+  local repo="$2"
+  local pkg="$3"
+
+  jq -r --arg repo "${repo}" --arg pkg "${pkg}" '.repos[$repo].packages[$pkg] // empty' <<<"${manifest_json}"
+}
+
+sanitize_version_for_filename() {
+  local version="$1"
+  printf '%s\n' "${version//:/.}"
+}
+
+find_local_package_file_for_version() {
+  local repo_dir="$1"
+  local pkg="$2"
+  local version="$3"
+  local version_glob file
+
+  version_glob="$(sanitize_version_for_filename "${version}")"
+  shopt -s nullglob
+  for file in "${repo_dir}/${pkg}-${version_glob}-"*.pkg.tar.*; do
+    [[ "${file}" == *.sig ]] && continue
+    printf '%s\n' "${file}"
+    shopt -u nullglob
+    return 0
+  done
+  shopt -u nullglob
+  return 1
+}
+
+ensure_local_package_file_for_version() {
+  local repo="$1"
+  local repo_dir="$2"
+  local pkg="$3"
+  local version="$4"
+  local tag="${repo}-${ARCH}"
+  local version_glob
+
+  if find_local_package_file_for_version "${repo_dir}" "${pkg}" "${version}" >/dev/null; then
+    return 0
+  fi
+
+  version_glob="$(sanitize_version_for_filename "${version}")"
+  if ! gh release download "${tag}" -D "${repo_dir}" -p "${pkg}-${version_glob}-*.pkg.tar.*" >/dev/null 2>&1; then
+    return 1
+  fi
+
+  find_local_package_file_for_version "${repo_dir}" "${pkg}" "${version}" >/dev/null
+}
+
+should_skip_core_pkgbuild() {
+  local pkg_dir="$1"
+  local repo_dir="$2"
+  local srcinfo_text desired_version published_version pkgname
+  local -a pkgnames=()
+
+  [[ "${desired_manifest_available}" == "1" && "${published_manifest_available}" == "1" ]] || return 1
+
+  srcinfo_text="$(srcinfo_from_dir "${pkg_dir}")" || return 1
+  mapfile -t pkgnames < <(awk -F' = ' '$1=="pkgname"{print $2}' <<<"${srcinfo_text}" | sort -u)
+  [[ "${#pkgnames[@]}" -gt 0 ]] || return 1
+
+  desired_version="$(manifest_version "${desired_manifest}" "${CORE_REPO}" "${pkgnames[0]}")"
+  [[ -n "${desired_version}" ]] || return 1
+
+  for pkgname in "${pkgnames[@]}"; do
+    published_version="$(manifest_version "${published_manifest}" "${CORE_REPO}" "${pkgname}")"
+    if [[ -z "${published_version}" ]]; then
+      echo "    build ${pkgname}: not present in published manifest (desired ${desired_version})"
+      return 1
+    fi
+    if [[ "${published_version}" != "${desired_version}" ]]; then
+      echo "    build ${pkgname}: published version ${published_version} differs from desired version ${desired_version}"
+      return 1
+    fi
+    if ! ensure_local_package_file_for_version "${CORE_REPO}" "${repo_dir}" "${pkgname}" "${desired_version}"; then
+      echo "    build ${pkgname}: published version matches ${desired_version}, but package artifact could not be reused locally"
+      return 1
+    fi
+  done
+
+  echo "    skip $(IFS=,; echo "${pkgnames[*]}"): published version ${desired_version} matches desired version ${desired_version}"
+  return 0
+}
+
+should_skip_extra_package() {
+  local pkg="$1"
+  local repo_dir="$2"
+  local desired_version published_version
+
+  [[ "${desired_manifest_available}" == "1" && "${published_manifest_available}" == "1" ]] || return 1
+
+  desired_version="$(manifest_version "${desired_manifest}" "${EXTRA_REPO}" "${pkg}")"
+  [[ -n "${desired_version}" ]] || return 1
+
+  published_version="$(manifest_version "${published_manifest}" "${EXTRA_REPO}" "${pkg}")"
+  if [[ -z "${published_version}" ]]; then
+    echo "    build ${pkg}: not present in published manifest (desired ${desired_version})"
+    return 1
+  fi
+  if [[ "${published_version}" != "${desired_version}" ]]; then
+    echo "    build ${pkg}: published version ${published_version} differs from desired version ${desired_version}"
+    return 1
+  fi
+  if ! ensure_local_package_file_for_version "${EXTRA_REPO}" "${repo_dir}" "${pkg}" "${desired_version}"; then
+    echo "    build ${pkg}: published version matches ${desired_version}, but package artifact could not be reused locally"
+    return 1
+  fi
+
+  echo "    skip ${pkg}: published version ${published_version} matches desired version ${desired_version}"
+  return 0
+}
 
 resolve_makepkg_jobs() {
   local cpu_cores total_mem_kb total_mem_gb ram_jobs jobs
@@ -247,6 +440,8 @@ mkdir -p "${SITE_DIR}/${CORE_REPO}/os/${ARCH}" "${SITE_DIR}/${EXTRA_REPO}/os/${A
 mkdir -p "${WORK_ROOT}"
 touch "${SITE_DIR}/.nojekyll"
 
+load_skip_manifests
+
 if [[ "${STAGE_ONLY}" != "1" ]]; then
   work_dir="$(mktemp -d "${WORK_ROOT%/}/rebuild.XXXXXXXX")"
 fi
@@ -273,6 +468,11 @@ build_core() {
     pkg_dir="$(cd -- "$(dirname -- "${pkgbuild}")" && pwd)"
     pkg_name="$(basename -- "${pkg_dir}")"
     echo "  - ${pkg_dir}"
+
+    if should_skip_core_pkgbuild "${pkg_dir}" "${out_dir}"; then
+      continue
+    fi
+
     (
       cd "${pkg_dir}" && \
       PKGDEST="${out_dir}" \
@@ -485,6 +685,10 @@ makepkg_with_pgp_retry() {
   for pkg in "${pkgs[@]}"; do
     echo "  - ${pkg}"
     local pkg_dir="${aur_root}/${pkg}"
+
+    if should_skip_extra_package "${pkg}" "${out_dir}"; then
+      continue
+    fi
 
     # Only use a saved snapshot when the package is actually gone from AUR.
     # Network or transient clone failures should still fail the build.

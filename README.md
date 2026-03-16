@@ -97,6 +97,12 @@ package is uploaded immediately and Pages metadata is refreshed from the current
 `dist/` contents. If a later package fails, GitHub Releases and GitHub Pages
 still reflect everything that finished successfully up to that point.
 
+Normal rebuilds also skip packages whose desired source version already matches
+the published GitHub repo version. For skipped packages, the build reuses the
+matching package artifact from GitHub if needed so local repo metadata can still
+be staged correctly. If version checks fail or a matching published artifact
+cannot be reused, the script falls back to rebuilding that package.
+
 Local builds also harden source downloads inside `scripts/rebuild.sh` by using
 repo-local `makepkg` download settings with `curl --http1.1` and retries. This
 helps with flaky upstream TLS endpoints used by some AUR packages.
