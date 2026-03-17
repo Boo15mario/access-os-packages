@@ -1,36 +1,102 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
+# Unified build script for access-os package repositories.
+# Reads packages/extra.list, builds from packages/extra/<pkg>/,
+# generates manifest inline. No incremental publishing.
+
+# ---------------------------------------------------------------------------
+# Helpers
+# ---------------------------------------------------------------------------
+
 die() {
   echo "Error: $*" >&2
   exit 1
 }
 
+read_list() {
+  local list_file="$1"
+  [[ -f "${list_file}" ]] || return 0
+  while IFS= read -r line; do
+    line="${line%%#*}"
+    line="${line#"${line%%[![:space:]]*}"}"
+    line="${line%"${line##*[![:space:]]}"}"
+    [[ -n "${line}" ]] && printf '%s\n' "${line}"
+  done <"${list_file}"
+}
+
+srcinfo_from_dir() {
+  local pkg_dir="$1"
+
+  if [[ -f "${pkg_dir}/.SRCINFO" ]]; then
+    cat "${pkg_dir}/.SRCINFO"
+    return 0
+  fi
+
+  if command -v makepkg >/dev/null 2>&1; then
+    (cd "${pkg_dir}" && makepkg --printsrcinfo)
+    return 0
+  fi
+
+  die "package at ${pkg_dir} is missing .SRCINFO and makepkg is not available"
+}
+
+# ---------------------------------------------------------------------------
+# Configuration
+# ---------------------------------------------------------------------------
+
 SCRIPT_DIR="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)"
 REPO_ROOT="$(cd -- "${SCRIPT_DIR}/.." && pwd)"
-source "${SCRIPT_DIR}/lib/aur-packaging.sh"
+
+ARCH="${ARCH:-x86_64}"
+CORE_REPO="${CORE_REPO:-access-os-core}"
+EXTRA_REPO="${EXTRA_REPO:-access-os-extra}"
+EXTRA_LIST_FILE="${EXTRA_LIST_FILE:-${REPO_ROOT}/packages/extra.list}"
+DIST_DIR="${DIST_DIR:-${REPO_ROOT}/dist}"
+SITE_DIR="${SITE_DIR:-${REPO_ROOT}/site}"
+WORK_ROOT="${WORK_ROOT:-${REPO_ROOT}/work}"
+REMOTE_NAME="${REMOTE_NAME:-origin}"
+CLEAN_BEFORE_BUILD="${CLEAN_BEFORE_BUILD:-1}"
+DOWNLOAD_HTTP_RETRIES="${DOWNLOAD_HTTP_RETRIES:-5}"
+DOWNLOAD_HTTP_RETRY_DELAY="${DOWNLOAD_HTTP_RETRY_DELAY:-3}"
+MAKEPKG_JOBS="${MAKEPKG_JOBS:-auto}"
+MAKEPKG_JOBS_MAX="${MAKEPKG_JOBS_MAX:-15}"
+
+MAKEPKG_DLAGENTS=(
+  "https::/usr/bin/curl --http1.1 -qgLC - --retry ${DOWNLOAD_HTTP_RETRIES} --retry-delay ${DOWNLOAD_HTTP_RETRY_DELAY} --retry-all-errors --fail -o %o %u"
+  "http::/usr/bin/curl --http1.1 -qgLC - --retry ${DOWNLOAD_HTTP_RETRIES} --retry-delay ${DOWNLOAD_HTTP_RETRY_DELAY} --retry-all-errors --fail -o %o %u"
+  "ftp::/usr/bin/curl --http1.1 -qgLC - --retry ${DOWNLOAD_HTTP_RETRIES} --retry-delay ${DOWNLOAD_HTTP_RETRY_DELAY} --retry-all-errors --fail -o %o %u"
+)
+
+# ---------------------------------------------------------------------------
+# Flags
+# ---------------------------------------------------------------------------
 
 usage() {
   cat <<'EOF'
-Usage: rebuild.sh [--dry-run] [--stage-only]
+Usage: build.sh [--dry-run] [--stage-only]
 
 Build packages and stage pacman repositories.
 
 Outputs:
-  dist/<repo>/<arch>/   Built package files + repo-add DB tarballs
+  dist/<repo>/<arch>/     Built package files + repo-add DB tarballs
   site/<repo>/os/<arch>/  Published repo DB/files (no packages)
-  site/manifest.json    Desired versions used for update detection
+  site/manifest.json      Desired versions used for update detection
 
 Environment overrides:
   ARCH                (default: x86_64)
   CORE_REPO           (default: access-os-core)
   EXTRA_REPO          (default: access-os-extra)
-  EXTRA_LIST_FILE     (default: package-lists/access-os-extra.txt)
+  EXTRA_LIST_FILE     (default: packages/extra.list)
   DIST_DIR            (default: dist)
   SITE_DIR            (default: site)
   WORK_ROOT           (default: work)
   REMOTE_NAME         (default: origin)
   CLEAN_BEFORE_BUILD  1=enabled (default), 0=disabled
+  DOWNLOAD_HTTP_RETRIES     (default: 5)
+  DOWNLOAD_HTTP_RETRY_DELAY (default: 3)
+  MAKEPKG_JOBS        (default: auto)
+  MAKEPKG_JOBS_MAX    (default: 15)
 EOF
 }
 
@@ -55,47 +121,135 @@ if [[ "$(id -u)" -eq 0 ]]; then
   die "do not run as root (makepkg refuses to run as root)"
 fi
 
-ARCH="${ARCH:-x86_64}"
-CORE_REPO="${CORE_REPO:-access-os-core}"
-EXTRA_REPO="${EXTRA_REPO:-access-os-extra}"
-EXTRA_LIST_FILE="${EXTRA_LIST_FILE:-${REPO_ROOT}/package-lists/access-os-extra.txt}"
-PKGBUILDS_DIR="${PKGBUILDS_DIR:-${REPO_ROOT}/pkgbuilds}"
-AUR_MIRROR_DIR="${AUR_MIRROR_DIR:-${HOME}/aur-mirror}"
-DIST_DIR="${DIST_DIR:-${REPO_ROOT}/dist}"
-SITE_DIR="${SITE_DIR:-${REPO_ROOT}/site}"
-WORK_ROOT="${WORK_ROOT:-${REPO_ROOT}/work}"
-REMOTE_NAME="${REMOTE_NAME:-origin}"
-CLEAN_BEFORE_BUILD="${CLEAN_BEFORE_BUILD:-1}"
-DOWNLOAD_HTTP_RETRIES="${DOWNLOAD_HTTP_RETRIES:-5}"
-DOWNLOAD_HTTP_RETRY_DELAY="${DOWNLOAD_HTTP_RETRY_DELAY:-3}"
-MAKEPKG_JOBS="${MAKEPKG_JOBS:-auto}"
-MAKEPKG_JOBS_MAX="${MAKEPKG_JOBS_MAX:-15}"
-ACCESS_OS_INCREMENTAL_PUBLISH="${ACCESS_OS_INCREMENTAL_PUBLISH:-0}"
-ACCESS_OS_INCREMENTAL_NO_PUSH="${ACCESS_OS_INCREMENTAL_NO_PUSH:-0}"
-ACCESS_OS_PUBLISH_HELPER="${ACCESS_OS_PUBLISH_HELPER:-${REPO_ROOT}/scripts/publish-local.sh}"
-ACCESS_OS_MANIFEST_CACHE="${ACCESS_OS_MANIFEST_CACHE:-}"
+# ---------------------------------------------------------------------------
+# resolve_makepkg_jobs
+# ---------------------------------------------------------------------------
 
-MAKEPKG_DLAGENTS=(
-  "https::/usr/bin/curl --http1.1 -qgLC - --retry ${DOWNLOAD_HTTP_RETRIES} --retry-delay ${DOWNLOAD_HTTP_RETRY_DELAY} --retry-all-errors --fail -o %o %u"
-  "http::/usr/bin/curl --http1.1 -qgLC - --retry ${DOWNLOAD_HTTP_RETRIES} --retry-delay ${DOWNLOAD_HTTP_RETRY_DELAY} --retry-all-errors --fail -o %o %u"
-  "ftp::/usr/bin/curl --http1.1 -qgLC - --retry ${DOWNLOAD_HTTP_RETRIES} --retry-delay ${DOWNLOAD_HTTP_RETRY_DELAY} --retry-all-errors --fail -o %o %u"
-)
+resolve_makepkg_jobs() {
+  local cpu_cores total_mem_kb total_mem_gb ram_jobs jobs
+
+  [[ "${MAKEPKG_JOBS_MAX}" =~ ^[0-9]+$ ]] || die "MAKEPKG_JOBS_MAX must be a positive integer"
+  if [[ "${MAKEPKG_JOBS_MAX}" -lt 1 ]]; then
+    die "MAKEPKG_JOBS_MAX must be at least 1"
+  fi
+
+  if [[ "${MAKEPKG_JOBS}" == "auto" ]]; then
+    cpu_cores="$(nproc)"
+    [[ -n "${cpu_cores}" && "${cpu_cores}" =~ ^[0-9]+$ ]] || die "failed to determine CPU core count"
+
+    total_mem_kb="$(awk '/^MemTotal:/ {print $2; exit}' /proc/meminfo)"
+    [[ -n "${total_mem_kb}" && "${total_mem_kb}" =~ ^[0-9]+$ ]] || die "failed to determine total system memory"
+
+    total_mem_gb="$(( total_mem_kb / 1024 / 1024 ))"
+    ram_jobs="$(( total_mem_gb / 2 ))"
+
+    jobs="${cpu_cores}"
+    if [[ "${ram_jobs}" -lt "${jobs}" ]]; then
+      jobs="${ram_jobs}"
+    fi
+    if [[ "${MAKEPKG_JOBS_MAX}" -lt "${jobs}" ]]; then
+      jobs="${MAKEPKG_JOBS_MAX}"
+    fi
+    if [[ "${jobs}" -lt 1 ]]; then
+      jobs=1
+    fi
+
+    printf '%s\n' "${jobs}"
+    return 0
+  fi
+
+  [[ "${MAKEPKG_JOBS}" =~ ^[0-9]+$ ]] || die "MAKEPKG_JOBS must be a positive integer or 'auto'"
+  if [[ "${MAKEPKG_JOBS}" -lt 1 ]]; then
+    die "MAKEPKG_JOBS must be at least 1"
+  fi
+
+  printf '%s\n' "${MAKEPKG_JOBS}"
+}
+
+RESOLVED_MAKEPKG_JOBS="$(resolve_makepkg_jobs)"
+MAKEPKG_MAKEFLAGS="-j${RESOLVED_MAKEPKG_JOBS}"
+
+# ---------------------------------------------------------------------------
+# Dry-run output and exit
+# ---------------------------------------------------------------------------
+
+if [[ "${DRY_RUN}" == "1" ]]; then
+  echo "Repo root: ${REPO_ROOT}"
+  echo "Arch: ${ARCH}"
+  echo "Core repo: ${CORE_REPO}"
+  echo "Extra repo: ${EXTRA_REPO}"
+  echo "Extra list: ${EXTRA_LIST_FILE}"
+  echo "Dist dir: ${DIST_DIR}"
+  echo "Site dir: ${SITE_DIR}"
+  echo "Work root: ${WORK_ROOT}"
+  echo "Clean before build: ${CLEAN_BEFORE_BUILD}"
+  echo "Makepkg jobs: ${RESOLVED_MAKEPKG_JOBS} (MAKEPKG_JOBS=${MAKEPKG_JOBS}, cap=${MAKEPKG_JOBS_MAX})"
+  echo "Stage only: ${STAGE_ONLY}"
+  echo ""
+  echo "Extra packages:"
+  mapfile -t _dry_pkgs < <(read_list "${EXTRA_LIST_FILE}")
+  if [[ "${#_dry_pkgs[@]}" -gt 0 ]]; then
+    printf '  - %s\n' "${_dry_pkgs[@]}"
+  else
+    echo "  (none)"
+  fi
+  exit 0
+fi
+
+# ---------------------------------------------------------------------------
+# Sudo keepalive and cleanup trap
+# ---------------------------------------------------------------------------
+
+sudo_keepalive_pid=""
+work_dir=""
+
+stop_sudo_keepalive() {
+  if [[ -n "${sudo_keepalive_pid}" ]]; then
+    kill "${sudo_keepalive_pid}" >/dev/null 2>&1 || true
+    wait "${sudo_keepalive_pid}" 2>/dev/null || true
+    sudo_keepalive_pid=""
+  fi
+}
+
+start_sudo_keepalive() {
+  command -v sudo >/dev/null 2>&1 || die "sudo is required for local dependency installs"
+
+  echo "Authenticating sudo for local package installs..."
+  sudo -v
+
+  (
+    while true; do
+      sudo -n true >/dev/null 2>&1 || exit 0
+      sleep 30
+    done
+  ) &
+  sudo_keepalive_pid="$!"
+}
+
+cleanup() {
+  stop_sudo_keepalive
+  if [[ -n "${work_dir}" ]]; then
+    rm -rf -- "${work_dir}"
+    work_dir=""
+  fi
+}
+
+trap cleanup EXIT
+
+if [[ "${STAGE_ONLY}" != "1" ]]; then
+  start_sudo_keepalive
+fi
+
+echo "Using makepkg jobs: ${RESOLVED_MAKEPKG_JOBS} (MAKEFLAGS=${MAKEPKG_MAKEFLAGS})"
+
+# ---------------------------------------------------------------------------
+# Manifest helpers: resolve_pages_base_url, load_skip_manifests, should_skip_*
+# ---------------------------------------------------------------------------
 
 published_manifest='{}'
 desired_manifest='{}'
 published_manifest_available=0
 desired_manifest_available=0
-
-srcinfo_from_dir() {
-  local pkg_dir="$1"
-
-  if [[ -f "${pkg_dir}/.SRCINFO" ]]; then
-    cat "${pkg_dir}/.SRCINFO"
-    return 0
-  fi
-
-  (cd "${pkg_dir}" && makepkg --printsrcinfo)
-}
 
 resolve_pages_base_url() {
   local remote_url parsed owner repo_name
@@ -123,6 +277,91 @@ resolve_pages_base_url() {
   printf 'https://%s.github.io/%s\n' "${owner}" "${repo_name}"
 }
 
+add_srcinfo_packages() {
+  local -n repo_json="$1"
+  local srcinfo_text="$2"
+
+  local epoch pkgver pkgrel version
+  epoch="$(awk -F' = ' '{gsub(/^[[:space:]]+|[[:space:]]+$/, "", $1); gsub(/^[[:space:]]+|[[:space:]]+$/, "", $2)} $1=="epoch"{print $2; exit}' <<<"${srcinfo_text}" || true)"
+  pkgver="$(awk -F' = ' '{gsub(/^[[:space:]]+|[[:space:]]+$/, "", $1); gsub(/^[[:space:]]+|[[:space:]]+$/, "", $2)} $1=="pkgver"{print $2; exit}' <<<"${srcinfo_text}")"
+  pkgrel="$(awk -F' = ' '{gsub(/^[[:space:]]+|[[:space:]]+$/, "", $1); gsub(/^[[:space:]]+|[[:space:]]+$/, "", $2)} $1=="pkgrel"{print $2; exit}' <<<"${srcinfo_text}")"
+
+  if [[ -z "${pkgver}" || -z "${pkgrel}" ]]; then
+    die "failed to parse pkgver/pkgrel from .SRCINFO"
+  fi
+
+  if [[ -n "${epoch}" && "${epoch}" != "0" ]]; then
+    version="${epoch}:${pkgver}-${pkgrel}"
+  else
+    version="${pkgver}-${pkgrel}"
+  fi
+
+  local -a pkgnames=()
+  mapfile -t pkgnames < <(awk -F' = ' '{gsub(/^[[:space:]]+|[[:space:]]+$/, "", $1); gsub(/^[[:space:]]+|[[:space:]]+$/, "", $2)} $1=="pkgname"{print $2}' <<<"${srcinfo_text}" | sort -u)
+  if [[ "${#pkgnames[@]}" -eq 0 ]]; then
+    die "failed to parse pkgname entries from .SRCINFO"
+  fi
+
+  local json="${repo_json}"
+  for pkgname in "${pkgnames[@]}"; do
+    json="$(jq -c --arg name "${pkgname}" --arg ver "${version}" '. + {($name): $ver}' <<<"${json}")"
+  done
+
+  repo_json="${json}"
+}
+
+generate_desired_manifest() {
+  local core_packages_json='{}' extra_packages_json='{}'
+  local -a missing=()
+
+  # Core packages
+  if [[ -d "${REPO_ROOT}/packages/core" ]]; then
+    while IFS= read -r -d '' pkgbuild; do
+      local pkg_dir
+      pkg_dir="$(cd -- "$(dirname -- "${pkgbuild}")" && pwd)"
+      local srcinfo
+      srcinfo="$(srcinfo_from_dir "${pkg_dir}")"
+      add_srcinfo_packages core_packages_json "${srcinfo}"
+    done < <(find "${REPO_ROOT}/packages/core" -mindepth 2 -maxdepth 2 -type f -name PKGBUILD -print0 | sort -z)
+  fi
+
+  # Extra packages
+  mapfile -t extra_packages < <(read_list "${EXTRA_LIST_FILE}")
+  for pkg in "${extra_packages[@]}"; do
+    local pkg_source_dir="${REPO_ROOT}/packages/extra/${pkg}"
+
+    if [[ ! -d "${pkg_source_dir}" || ! -f "${pkg_source_dir}/PKGBUILD" ]]; then
+      missing+=("${pkg}")
+      continue
+    fi
+
+    local pkgbuild_srcinfo
+    pkgbuild_srcinfo="$(srcinfo_from_dir "${pkg_source_dir}")"
+    add_srcinfo_packages extra_packages_json "${pkgbuild_srcinfo}"
+  done
+
+  if [[ "${#missing[@]}" -gt 0 ]]; then
+    {
+      echo "Error: package source(s) not found in packages/extra/:"
+      printf '  - %s\n' "${missing[@]}"
+    } >&2
+    return 1
+  fi
+
+  jq -n \
+    --argjson core "${core_packages_json}" \
+    --argjson extra "${extra_packages_json}" \
+    --arg core_repo "${CORE_REPO}" \
+    --arg extra_repo "${EXTRA_REPO}" \
+    '{
+      version: 1,
+      repos: {
+        ($core_repo): { packages: $core },
+        ($extra_repo): { packages: $extra }
+      }
+    }' | jq -S .
+}
+
 load_skip_manifests() {
   local base_url desired_manifest_raw remote_manifest_raw
 
@@ -130,12 +369,9 @@ load_skip_manifests() {
     return 0
   fi
 
-  if desired_manifest_raw="$("${REPO_ROOT}/scripts/gen-manifest.sh")"; then
+  if desired_manifest_raw="$(generate_desired_manifest)"; then
     if desired_manifest="$(jq -S . <<<"${desired_manifest_raw}" 2>/dev/null)"; then
       desired_manifest_available=1
-      if [[ -n "${ACCESS_OS_MANIFEST_CACHE}" ]]; then
-        printf '%s\n' "${desired_manifest}" >"${ACCESS_OS_MANIFEST_CACHE}"
-      fi
     else
       die "desired manifest is invalid"
     fi
@@ -275,106 +511,9 @@ should_skip_extra_package() {
   return 0
 }
 
-resolve_makepkg_jobs() {
-  local cpu_cores total_mem_kb total_mem_gb ram_jobs jobs
-
-  [[ "${MAKEPKG_JOBS_MAX}" =~ ^[0-9]+$ ]] || die "MAKEPKG_JOBS_MAX must be a positive integer"
-  if [[ "${MAKEPKG_JOBS_MAX}" -lt 1 ]]; then
-    die "MAKEPKG_JOBS_MAX must be at least 1"
-  fi
-
-  if [[ "${MAKEPKG_JOBS}" == "auto" ]]; then
-    cpu_cores="$(nproc)"
-    [[ -n "${cpu_cores}" && "${cpu_cores}" =~ ^[0-9]+$ ]] || die "failed to determine CPU core count"
-
-    total_mem_kb="$(awk '/^MemTotal:/ {print $2; exit}' /proc/meminfo)"
-    [[ -n "${total_mem_kb}" && "${total_mem_kb}" =~ ^[0-9]+$ ]] || die "failed to determine total system memory"
-
-    total_mem_gb="$(( total_mem_kb / 1024 / 1024 ))"
-    ram_jobs="$(( total_mem_gb / 2 ))"
-
-    jobs="${cpu_cores}"
-    if [[ "${ram_jobs}" -lt "${jobs}" ]]; then
-      jobs="${ram_jobs}"
-    fi
-    if [[ "${MAKEPKG_JOBS_MAX}" -lt "${jobs}" ]]; then
-      jobs="${MAKEPKG_JOBS_MAX}"
-    fi
-    if [[ "${jobs}" -lt 1 ]]; then
-      jobs=1
-    fi
-
-    printf '%s\n' "${jobs}"
-    return 0
-  fi
-
-  [[ "${MAKEPKG_JOBS}" =~ ^[0-9]+$ ]] || die "MAKEPKG_JOBS must be a positive integer or 'auto'"
-  if [[ "${MAKEPKG_JOBS}" -lt 1 ]]; then
-    die "MAKEPKG_JOBS must be at least 1"
-  fi
-
-  printf '%s\n' "${MAKEPKG_JOBS}"
-}
-
-RESOLVED_MAKEPKG_JOBS="$(resolve_makepkg_jobs)"
-MAKEPKG_MAKEFLAGS="-j${RESOLVED_MAKEPKG_JOBS}"
-
-if [[ "${DRY_RUN}" == "1" ]]; then
-  echo "Repo root: ${REPO_ROOT}"
-  echo "Arch: ${ARCH}"
-  echo "Core repo: ${CORE_REPO}"
-  echo "Extra repo: ${EXTRA_REPO}"
-  echo "Extra list: ${EXTRA_LIST_FILE}"
-  echo "Dist dir: ${DIST_DIR}"
-  echo "Site dir: ${SITE_DIR}"
-  echo "Work root: ${WORK_ROOT}"
-  echo "Clean before build: ${CLEAN_BEFORE_BUILD}"
-  echo "Makepkg jobs: ${RESOLVED_MAKEPKG_JOBS} (MAKEPKG_JOBS=${MAKEPKG_JOBS}, cap=${MAKEPKG_JOBS_MAX})"
-  echo "Stage only: ${STAGE_ONLY}"
-  exit 0
-fi
-
-sudo_keepalive_pid=""
-work_dir=""
-
-stop_sudo_keepalive() {
-  if [[ -n "${sudo_keepalive_pid}" ]]; then
-    kill "${sudo_keepalive_pid}" >/dev/null 2>&1 || true
-    wait "${sudo_keepalive_pid}" 2>/dev/null || true
-    sudo_keepalive_pid=""
-  fi
-}
-
-start_sudo_keepalive() {
-  command -v sudo >/dev/null 2>&1 || die "sudo is required for local dependency installs"
-
-  echo "Authenticating sudo for local package installs..."
-  sudo -v
-
-  (
-    while true; do
-      sudo -n true >/dev/null 2>&1 || exit 0
-      sleep 30
-    done
-  ) &
-  sudo_keepalive_pid="$!"
-}
-
-cleanup() {
-  stop_sudo_keepalive
-  if [[ -n "${work_dir}" ]]; then
-    rm -rf -- "${work_dir}"
-    work_dir=""
-  fi
-}
-
-trap cleanup EXIT
-
-if [[ "${STAGE_ONLY}" != "1" ]]; then
-  start_sudo_keepalive
-fi
-
-echo "Using makepkg jobs: ${RESOLVED_MAKEPKG_JOBS} (MAKEFLAGS=${MAKEPKG_MAKEFLAGS})"
+# ---------------------------------------------------------------------------
+# Directory management
+# ---------------------------------------------------------------------------
 
 clean_dir_contents() {
   local dir="$1"
@@ -391,6 +530,42 @@ clean_dir_contents() {
 
   find "${resolved_dir}" -mindepth 1 -maxdepth 1 -exec rm -rf -- {} +
 }
+
+if [[ "${CLEAN_BEFORE_BUILD}" == "1" ]]; then
+  if [[ "${STAGE_ONLY}" != "1" ]]; then
+    clean_dir_contents "${DIST_DIR}"
+  fi
+  clean_dir_contents "${SITE_DIR}"
+fi
+
+mkdir -p "${DIST_DIR}/${CORE_REPO}/${ARCH}" "${DIST_DIR}/${EXTRA_REPO}/${ARCH}"
+mkdir -p "${SITE_DIR}/${CORE_REPO}/os/${ARCH}" "${SITE_DIR}/${EXTRA_REPO}/os/${ARCH}"
+mkdir -p "${WORK_ROOT}"
+touch "${SITE_DIR}/.nojekyll"
+
+# Bootstrap empty repo DBs so that repos with no packages yet still have
+# valid DB files. The final create_repo_db calls overwrite these.
+for _bootstrap_repo in "${CORE_REPO}" "${EXTRA_REPO}"; do
+  _bootstrap_dist="${DIST_DIR}/${_bootstrap_repo}/${ARCH}"
+  _bootstrap_site="${SITE_DIR}/${_bootstrap_repo}/os/${ARCH}"
+  if [[ ! -f "${_bootstrap_dist}/${_bootstrap_repo}.db.tar.gz" ]]; then
+    tar -czf "${_bootstrap_dist}/${_bootstrap_repo}.db.tar.gz" --files-from /dev/null
+    tar -czf "${_bootstrap_dist}/${_bootstrap_repo}.files.tar.gz" --files-from /dev/null
+    cp -f "${_bootstrap_dist}/${_bootstrap_repo}.db.tar.gz" "${_bootstrap_site}/${_bootstrap_repo}.db"
+    cp -f "${_bootstrap_dist}/${_bootstrap_repo}.files.tar.gz" "${_bootstrap_site}/${_bootstrap_repo}.files"
+  fi
+done
+unset _bootstrap_repo _bootstrap_dist _bootstrap_site
+
+if [[ "${STAGE_ONLY}" != "1" ]]; then
+  work_dir="$(mktemp -d "${WORK_ROOT%/}/build.XXXXXXXX")"
+fi
+
+load_skip_manifests
+
+# ---------------------------------------------------------------------------
+# Build helpers
+# ---------------------------------------------------------------------------
 
 resolve_built_package_files() {
   local pkg_dir="$1"
@@ -412,70 +587,14 @@ resolve_built_package_files() {
   done
 }
 
-publish_incrementally() {
-  local repo="$1"
-  local pkg_name="$2"
-  shift 2
-  local -a built_files=("$@")
-  local -a cmd=("${ACCESS_OS_PUBLISH_HELPER}")
-
-  [[ "${ACCESS_OS_INCREMENTAL_PUBLISH}" == "1" ]] || return 0
-
-  if [[ "${#built_files[@]}" -eq 0 ]]; then
-    die "incremental publish requested for ${pkg_name}, but no built package files were found"
-  fi
-
-  if [[ "${ACCESS_OS_INCREMENTAL_NO_PUSH}" == "1" ]]; then
-    cmd+=(--no-push)
-  fi
-
-  cmd+=(--publish-package "${repo}" --)
-
-  echo "    publishing built package(s) for ${pkg_name} to ${repo}"
-  "${cmd[@]}" "${built_files[@]}"
-}
-
-if [[ "${CLEAN_BEFORE_BUILD}" == "1" ]]; then
-  if [[ "${STAGE_ONLY}" != "1" ]]; then
-    clean_dir_contents "${DIST_DIR}"
-  fi
-  clean_dir_contents "${SITE_DIR}"
-fi
-
-mkdir -p "${DIST_DIR}/${CORE_REPO}/${ARCH}" "${DIST_DIR}/${EXTRA_REPO}/${ARCH}"
-mkdir -p "${SITE_DIR}/${CORE_REPO}/os/${ARCH}" "${SITE_DIR}/${EXTRA_REPO}/os/${ARCH}"
-mkdir -p "${WORK_ROOT}"
-touch "${SITE_DIR}/.nojekyll"
-
-# Bootstrap empty repo DBs so that incremental publishes during the build
-# always have a valid DB for every repo (including repos with no packages yet).
-# The final create_repo_db calls at the end of this script overwrite these with
-# the real content.
-for _bootstrap_repo in "${CORE_REPO}" "${EXTRA_REPO}"; do
-  _bootstrap_dist="${DIST_DIR}/${_bootstrap_repo}/${ARCH}"
-  _bootstrap_site="${SITE_DIR}/${_bootstrap_repo}/os/${ARCH}"
-  if [[ ! -f "${_bootstrap_dist}/${_bootstrap_repo}.db.tar.gz" ]]; then
-    tar -czf "${_bootstrap_dist}/${_bootstrap_repo}.db.tar.gz" --files-from /dev/null
-    tar -czf "${_bootstrap_dist}/${_bootstrap_repo}.files.tar.gz" --files-from /dev/null
-    cp -f "${_bootstrap_dist}/${_bootstrap_repo}.db.tar.gz" "${_bootstrap_site}/${_bootstrap_repo}.db"
-    cp -f "${_bootstrap_dist}/${_bootstrap_repo}.files.tar.gz" "${_bootstrap_site}/${_bootstrap_repo}.files"
-  fi
-done
-unset _bootstrap_repo _bootstrap_dist _bootstrap_site
-
-if [[ "${STAGE_ONLY}" != "1" ]]; then
-  work_dir="$(mktemp -d "${WORK_ROOT%/}/rebuild.XXXXXXXX")"
-  ACCESS_OS_MANIFEST_CACHE="${work_dir}/desired-manifest.json"
-  export ACCESS_OS_MANIFEST_CACHE
-fi
-
-load_skip_manifests
+# ---------------------------------------------------------------------------
+# build_core
+# ---------------------------------------------------------------------------
 
 build_core() {
   local out_dir="${DIST_DIR}/${CORE_REPO}/${ARCH}"
   local -a pkgbuilds=()
   local pkg_dir pkg_name
-  local -a built_files=()
 
   if [[ -d "${REPO_ROOT}/packages/core" ]]; then
     while IFS= read -r -d '' pkgbuild; do
@@ -505,30 +624,26 @@ build_core() {
       DLAGENTS=("${MAKEPKG_DLAGENTS[@]}") \
       makepkg --syncdeps --noconfirm --clean --cleanbuild --needed
     )
-
-    mapfile -t built_files < <(resolve_built_package_files "${pkg_dir}" "${out_dir}")
-    publish_incrementally "${CORE_REPO}" "${pkg_name}" "${built_files[@]}"
   done
 }
 
-read_extra_list() {
-  aur_read_extra_packages_file "${EXTRA_LIST_FILE}"
-}
+# ---------------------------------------------------------------------------
+# build_extra
+# ---------------------------------------------------------------------------
 
 build_extra() {
   local out_dir="${DIST_DIR}/${EXTRA_REPO}/${ARCH}"
   local aur_root="${work_dir}/aur"
   mkdir -p "${aur_root}"
 
-  mapfile -t pkgs < <(read_extra_list)
+  mapfile -t pkgs < <(read_list "${EXTRA_LIST_FILE}")
   if [[ "${#pkgs[@]}" -eq 0 ]]; then
-    echo "Info: no AUR packages listed in ${EXTRA_LIST_FILE}"
+    echo "Info: no extra packages listed in ${EXTRA_LIST_FILE}"
     return 0
   fi
 
-  # Some AUR packages depend on other AUR-only packages. Since makepkg --syncdeps
-  # can only install dependencies from pacman repos, we optionally install
-  # certain built packages into the build environment to satisfy later builds.
+  # AUR packages that must be installed after build so later packages can
+  # satisfy dependencies not available in pacman repos.
   local -a install_after_build_pkgs=(
     lib32-unixodbc
     openssl-1.0
@@ -576,7 +691,7 @@ build_extra() {
     done
   }
 
-makepkg_with_pgp_retry() {
+  makepkg_with_pgp_retry() {
     local pkg_dir="$1"
     local pkg_name="$2"
     shift 2
@@ -631,25 +746,23 @@ makepkg_with_pgp_retry() {
     done
   }
 
-  echo "Building ${#pkgs[@]} AUR package(s)..."
-  local pkgbuilds_save_dir="${PKGBUILDS_DIR}"
+  echo "Building ${#pkgs[@]} extra package(s)..."
   local -a built_files=()
-  mkdir -p "${pkgbuilds_save_dir}"
   for pkg in "${pkgs[@]}"; do
     echo "  - ${pkg}"
+    local pkg_source_dir="${REPO_ROOT}/packages/extra/${pkg}"
     local pkg_dir="${aur_root}/${pkg}"
-    local pkg_source_dir=""
 
     if should_skip_extra_package "${pkg}" "${out_dir}"; then
       continue
     fi
 
-    if ! pkg_source_dir="$(aur_resolve_extra_package_source_dir "${pkg}")"; then
-      die "${pkg} is missing from both $(aur_curated_extra_dir "${pkg}") and $(aur_pkgbuild_snapshot_dir "${pkg}") (use ./scripts/promote-extra-package.sh or ./scripts/import-aur-snapshots.sh)"
+    if [[ ! -d "${pkg_source_dir}" || ! -f "${pkg_source_dir}/PKGBUILD" ]]; then
+      die "${pkg} is missing from packages/extra/${pkg}/ (expected PKGBUILD at ${pkg_source_dir}/PKGBUILD)"
     fi
 
     echo "    using packaging source: ${pkg_source_dir}"
-    copy_packaging_snapshot "${pkg_source_dir}" "${pkg_dir}"
+    cp -a "${pkg_source_dir}" "${pkg_dir}"
 
     import_pgp_keys "${pkg_dir}"
     local -a makepkg_flags=(--syncdeps --noconfirm --clean --cleanbuild --needed)
@@ -658,9 +771,6 @@ makepkg_with_pgp_retry() {
     fi
     makepkg_with_pgp_retry "${pkg_dir}" "${pkg}" "${makepkg_flags[@]}"
     mapfile -t built_files < <(resolve_built_package_files "${pkg_dir}" "${out_dir}")
-
-    copy_packaging_snapshot "${pkg_dir}" "${pkgbuilds_save_dir}/${pkg}"
-    publish_incrementally "${EXTRA_REPO}" "${pkg}" "${built_files[@]}"
 
     if should_install_after_build "${pkg}"; then
       echo "    installing built package into build environment: ${pkg}"
@@ -672,6 +782,10 @@ makepkg_with_pgp_retry() {
   done
 }
 
+# ---------------------------------------------------------------------------
+# create_repo_db (with epoch colon normalization)
+# ---------------------------------------------------------------------------
+
 create_repo_db() {
   local repo="$1"
   local repo_dir="$2"
@@ -682,6 +796,8 @@ create_repo_db() {
   (
     cd "${repo_dir}"
 
+    # Normalize epoch colons in filenames: pacman uses ':' in version strings
+    # but GitHub Releases / some filesystems don't handle colons well.
     shopt -s nullglob
     for f in *.pkg.tar.*; do
       [[ "${f}" == *.sig ]] && continue
@@ -717,6 +833,10 @@ create_repo_db() {
     cp -f "${repo}.files.tar.gz" "${pages_dir}/${repo}.files"
   )
 }
+
+# ---------------------------------------------------------------------------
+# build_manifest_from_local_dbs (for --stage-only)
+# ---------------------------------------------------------------------------
 
 local_repo_versions_from_db() {
   local repo="$1"
@@ -775,6 +895,10 @@ build_manifest_from_local_dbs() {
     }' | jq -S .
 }
 
+# ---------------------------------------------------------------------------
+# Main: build or stage-only, then create repo DBs and manifest
+# ---------------------------------------------------------------------------
+
 if [[ "${STAGE_ONLY}" == "1" ]]; then
   echo "Stage-only mode: skipping package builds and reusing dist/ outputs."
 else
@@ -788,7 +912,7 @@ create_repo_db "${EXTRA_REPO}" "${DIST_DIR}/${EXTRA_REPO}/${ARCH}" "${SITE_DIR}/
 if [[ "${STAGE_ONLY}" == "1" ]]; then
   build_manifest_from_local_dbs >"${SITE_DIR}/manifest.json"
 else
-  "${REPO_ROOT}/scripts/gen-manifest.sh" >"${SITE_DIR}/manifest.json"
+  generate_desired_manifest >"${SITE_DIR}/manifest.json"
 fi
 
 {
