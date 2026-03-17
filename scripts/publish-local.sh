@@ -44,8 +44,8 @@ REMOTE_NAME="${REMOTE_NAME:-origin}"
 ACCESS_OS_MANIFEST_CACHE="${ACCESS_OS_MANIFEST_CACHE:-}"
 PAGES_RECONCILE_ATTEMPTS="${PAGES_RECONCILE_ATTEMPTS:-20}"
 PAGES_RECONCILE_DELAY="${PAGES_RECONCILE_DELAY:-6}"
-PAGES_FETCH_CONNECT_TIMEOUT="${PAGES_FETCH_CONNECT_TIMEOUT:-5}"
-PAGES_FETCH_MAX_TIME="${PAGES_FETCH_MAX_TIME:-20}"
+PAGES_FETCH_CONNECT_TIMEOUT="${PAGES_FETCH_CONNECT_TIMEOUT:-3}"
+PAGES_FETCH_MAX_TIME="${PAGES_FETCH_MAX_TIME:-8}"
 
 BUILD_ONLY=0
 PUBLISH_ONLY=0
@@ -373,6 +373,7 @@ stage_incremental_repo_update() {
 
 fetch_remote_manifest() {
   local base_url="$1"
+  echo "  fetching published manifest..." >&2
   curl -fsSL \
     --connect-timeout "${PAGES_FETCH_CONNECT_TIMEOUT}" \
     --max-time "${PAGES_FETCH_MAX_TIME}" \
@@ -388,6 +389,7 @@ fetch_remote_repo_versions() {
   db_file="${tmpdir}/${repo}.db.tar.gz"
   json='{}'
 
+  echo "  fetching published repo DB for ${repo}..." >&2
   curl -fsSL \
     --connect-timeout "${PAGES_FETCH_CONNECT_TIMEOUT}" \
     --max-time "${PAGES_FETCH_MAX_TIME}" \
