@@ -9,6 +9,30 @@ MIRROR_DIR="${MIRROR_DIR:-${REPO_ROOT}/aur-mirror}"
 EXTRA_DIR="${EXTRA_DIR:-${REPO_ROOT}/packages/extra}"
 LIST_FILE="${LIST_FILE:-${REPO_ROOT}/packages/extra.list}"
 
+APPLY=0
+INTERACTIVE=0
+while [[ $# -gt 0 ]]; do
+  case "$1" in
+    --apply) APPLY=1 ;;
+    --interactive) INTERACTIVE=1 ;;
+    -h|--help)
+      cat <<'EOF'
+Usage: compare-mirror.sh [--apply] [--interactive]
+
+Compare saved packages/extra/ PKGBUILDs against the synced aur-mirror/.
+
+Flags:
+  --apply        Copy changed PKGBUILDs from mirror to packages/extra/
+  --interactive  Show changes then prompt before applying (used by menu)
+  -h, --help     Show this help
+EOF
+      exit 0
+      ;;
+    *) die "unknown argument: $1" ;;
+  esac
+  shift
+done
+
 [[ -d "${MIRROR_DIR}" ]] || die "mirror directory not found: ${MIRROR_DIR} (run option 5 first)"
 [[ -f "${LIST_FILE}" ]] || die "package list not found: ${LIST_FILE}"
 
@@ -46,7 +70,10 @@ normalize_pkgbuild() {
   fi
 }
 
+# Collect packages that need updating into parallel arrays.
 declare -a updates=() build_changes=() new_pkgs=() missing=()
+# All packages that have actionable changes (for --apply).
+declare -a actionable_pkgs=()
 
 while IFS= read -r pkg; do
   mirror_dir="${MIRROR_DIR}/${pkg}"
@@ -59,6 +86,7 @@ while IFS= read -r pkg; do
 
   if [[ ! -f "${extra_dir}/PKGBUILD" ]]; then
     new_pkgs+=("${pkg}")
+    actionable_pkgs+=("${pkg}")
     continue
   fi
 
@@ -69,6 +97,7 @@ while IFS= read -r pkg; do
   if [[ "${pkg}" != *-git ]]; then
     if [[ "${mirror_ver}" != "${extra_ver}" ]]; then
       updates+=("${pkg}|${extra_ver}|${mirror_ver}")
+      actionable_pkgs+=("${pkg}")
       continue
     fi
   fi
@@ -78,6 +107,7 @@ while IFS= read -r pkg; do
   extra_norm="$(normalize_pkgbuild "${extra_dir}/PKGBUILD" "${pkg}")"
   if [[ "${mirror_norm}" != "${extra_norm}" ]]; then
     build_changes+=("${pkg}|${extra_ver}|${mirror_ver}")
+    actionable_pkgs+=("${pkg}")
   fi
 done < <(read_list)
 
@@ -126,6 +156,48 @@ fi
 
 if [[ "${total}" -eq 0 ]]; then
   echo "All packages are in sync with the AUR mirror."
-else
-  echo "${total} package(s) may need a rebuild."
+  exit 0
+fi
+
+echo "${total} package(s) may need a rebuild."
+
+# ---------------------------------------------------------------------------
+# Apply: copy updated PKGBUILDs from mirror to packages/extra/
+# ---------------------------------------------------------------------------
+
+apply_changes() {
+  local pkg mirror_dir extra_dir
+  for pkg in "${actionable_pkgs[@]}"; do
+    mirror_dir="${MIRROR_DIR}/${pkg}"
+    extra_dir="${EXTRA_DIR}/${pkg}"
+    echo "  syncing ${pkg}"
+    mkdir -p "${extra_dir}"
+    rsync -a --delete \
+      --exclude='.git' \
+      --exclude='src/' \
+      --exclude='pkg/' \
+      --exclude='*.pkg.tar.*' \
+      --exclude='*.src.tar.*' \
+      --exclude='*.log' \
+      "${mirror_dir}/" "${extra_dir}/"
+  done
+  echo ""
+  echo "Updated ${#actionable_pkgs[@]} package(s) in packages/extra/."
+  echo "Run a build to rebuild the changed packages."
+}
+
+if [[ "${APPLY}" -eq 1 ]]; then
+  echo ""
+  apply_changes
+elif [[ "${INTERACTIVE}" -eq 1 ]]; then
+  echo ""
+  read -rp "Apply changes from mirror to packages/extra/? [y/N]: " answer
+  case "${answer}" in
+    y|Y|yes|YES)
+      apply_changes
+      ;;
+    *)
+      echo "No changes applied."
+      ;;
+  esac
 fi

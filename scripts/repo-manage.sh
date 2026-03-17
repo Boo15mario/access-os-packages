@@ -41,7 +41,7 @@ while true; do
     4) run "${SCRIPT_DIR}/build.sh" --dry-run ;;
     5) run "${SCRIPT_DIR}/sync-aur-mirror.sh" ;;
     6) run "${SCRIPT_DIR}/check-upstream-updates.sh" ;;
-    7) run "${SCRIPT_DIR}/compare-mirror.sh" ;;
+    7) run "${SCRIPT_DIR}/compare-mirror.sh" --interactive ;;
     8) run "${SCRIPT_DIR}/check-builder.sh" ;;
     9) run "${SCRIPT_DIR}/bootstrap-builder.sh" ;;
     10) run "${SCRIPT_DIR}/build.sh" --stage-only ;;
