@@ -37,8 +37,27 @@ Promote a package into this directory with:
 ./scripts/promote-extra-package.sh <pkgname>
 ```
 
-Compare a curated package against the local AUR mirror with:
+Review a curated package against the local AUR mirror with:
 
 ```bash
-./scripts/diff-extra-package-upstream.sh <pkgname>
+./scripts/refresh-extra-package.sh <pkgname>
+```
+
+Apply a reviewed upstream mirror update to a curated package with:
+
+```bash
+./scripts/refresh-extra-package.sh --apply <pkgname>
+```
+
+Review all curated packages at once with:
+
+```bash
+./scripts/review-extra-packages.sh
+./scripts/review-extra-packages.sh --diff
+```
+
+Find transition-list packages that are mirrored but not yet curated with:
+
+```bash
+./scripts/review-extra-packages.sh --uncurated
 ```

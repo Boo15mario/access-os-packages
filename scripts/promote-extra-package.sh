@@ -10,7 +10,11 @@ usage() {
   cat <<'EOF'
 Usage: promote-extra-package.sh <pkgname>
 
-Promote an access-os-extra package into packages/extra/.
+Promote a new access-os-extra package into packages/extra/.
+
+Use this to add a package from the mirror or pkgbuild fallback into curated
+packaging. For updating an already curated package from the mirror, use
+refresh-extra-package.sh instead.
 
 Source precedence:
   1. local AUR mirror in AUR_MIRROR_DIR/<pkg>/

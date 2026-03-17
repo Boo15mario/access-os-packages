@@ -40,15 +40,12 @@ mirror_dir="$(aur_local_mirror_pkg_dir "${pkg}")"
 [[ -d "${mirror_dir}" && -f "${mirror_dir}/PKGBUILD" ]] || die "mirror package is missing: ${mirror_dir}"
 
 mkdir -p "${REPO_ROOT}/work"
-curated_tmp="$(mktemp -d "${REPO_ROOT%/}/work/diff-curated.${pkg}.XXXXXXXX")"
-mirror_tmp="$(mktemp -d "${REPO_ROOT%/}/work/diff-mirror.${pkg}.XXXXXXXX")"
+curated_tmp="$(aur_prepare_normalized_snapshot "${curated_dir}" "${REPO_ROOT}/work" "diff-curated.${pkg}")"
+mirror_tmp="$(aur_prepare_normalized_snapshot "${mirror_dir}" "${REPO_ROOT}/work" "diff-mirror.${pkg}")"
 cleanup() {
   rm -rf -- "${curated_tmp}" "${mirror_tmp}"
 }
 trap cleanup EXIT
-
-copy_packaging_snapshot "${curated_dir}" "${curated_tmp}"
-copy_packaging_snapshot "${mirror_dir}" "${mirror_tmp}"
 
 echo "Diffing curated package against mirror for ${pkg}"
 diff -ru --label "packages/extra/${pkg}" --label "aur-mirror/${pkg}" "${curated_tmp}" "${mirror_tmp}" || true

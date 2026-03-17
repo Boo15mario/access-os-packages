@@ -147,10 +147,29 @@ Promote a reviewed package into `packages/extra/`:
 ./scripts/promote-extra-package.sh <pkgname>
 ```
 
-Compare a curated package against the local mirror:
+Review a curated package against the local mirror:
 
 ```bash
-./scripts/diff-extra-package-upstream.sh <pkgname>
+./scripts/refresh-extra-package.sh <pkgname>
+```
+
+Apply the reviewed mirror update to the curated package:
+
+```bash
+./scripts/refresh-extra-package.sh --apply <pkgname>
+```
+
+Review all curated extra packages:
+
+```bash
+./scripts/review-extra-packages.sh
+./scripts/review-extra-packages.sh --diff
+```
+
+Find transition-list packages that are mirrored but not yet curated:
+
+```bash
+./scripts/review-extra-packages.sh --uncurated
 ```
 
 Recommended local workflow:
@@ -158,6 +177,15 @@ Recommended local workflow:
 ```bash
 ./scripts/sync-aur-mirror.sh
 ./scripts/promote-extra-package.sh <pkgname>
+./scripts/publish-local.sh
+```
+
+Recommended update workflow for an already curated extra package:
+
+```bash
+./scripts/sync-aur-mirror.sh
+./scripts/refresh-extra-package.sh <pkgname>
+./scripts/refresh-extra-package.sh --apply <pkgname>
 ./scripts/publish-local.sh
 ```
 

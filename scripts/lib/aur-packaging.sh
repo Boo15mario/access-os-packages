@@ -48,6 +48,13 @@ aur_curated_extra_has_package() {
   [[ -d "${pkg_dir}" && -f "${pkg_dir}/PKGBUILD" ]]
 }
 
+aur_list_curated_extra_packages() {
+  local extra_root="${PACKAGES_DIR:-${REPO_ROOT}/packages}/extra"
+  [[ -d "${extra_root}" ]] || return 0
+
+  find "${extra_root}" -mindepth 1 -maxdepth 1 -type d -printf '%f\n' | sort
+}
+
 aur_mirror_has_package() {
   local pkg="$1"
   local pkg_dir
@@ -119,6 +126,18 @@ copy_packaging_snapshot() {
       cp -a -- "${item}" "${dst_dir}/${rel_path}"
     done < <(find . -type f -print0)
   )
+}
+
+aur_prepare_normalized_snapshot() {
+  local src_dir="$1"
+  local tmp_root="$2"
+  local prefix="$3"
+  local out_dir
+
+  mkdir -p -- "${tmp_root}"
+  out_dir="$(mktemp -d "${tmp_root%/}/${prefix}.XXXXXXXX")"
+  copy_packaging_snapshot "${src_dir}" "${out_dir}"
+  printf '%s\n' "${out_dir}"
 }
 
 aur_resolve_package_source_dir() {
