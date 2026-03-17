@@ -628,8 +628,8 @@ makepkg_with_pgp_retry() {
       continue
     fi
 
-    if ! pkg_source_dir="$(aur_resolve_package_source_dir "${pkg}")"; then
-      die "${pkg} is missing from both $(aur_local_mirror_pkg_dir "${pkg}") and $(aur_pkgbuild_snapshot_dir "${pkg}")"
+    if ! pkg_source_dir="$(aur_resolve_extra_package_source_dir "${pkg}")"; then
+      die "${pkg} is missing from both $(aur_curated_extra_dir "${pkg}") and $(aur_pkgbuild_snapshot_dir "${pkg}") (use ./scripts/promote-extra-package.sh or ./scripts/import-aur-snapshots.sh)"
     fi
 
     echo "    using packaging source: ${pkg_source_dir}"

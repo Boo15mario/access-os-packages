@@ -3,7 +3,7 @@
 Two pacman repositories for Access OS (Arch Linux based):
 
 - `access-os-core`: Access OS maintained packages (PKGBUILDs live in this repo)
-- `access-os-extra`: AUR packages built locally on your Arch system
+- `access-os-extra`: curated extra packages built locally on your Arch system
 
 ## Using the repos
 
@@ -82,10 +82,9 @@ Recovery after an interrupted build:
 ```
 
 What `scripts/publish-local.sh` does:
-- refreshes removed-AUR tracking metadata
 - runs `scripts/rebuild.sh` on your Arch system
 - uploads package files to the moving GitHub Release tags as each package finishes building
-- commits updated `pkgbuilds/` and `metadata/` unless `--skip-commit` is used
+- commits updated `packages/extra/`, `pkgbuilds/`, and `metadata/` unless `--skip-commit` is used
 - pushes generated `site/` content to the `gh-pages` branch for GitHub Pages
 
 If you run `./scripts/publish-local.sh --publish-only` and `site/` is missing or
@@ -121,8 +120,8 @@ MAKEPKG_JOBS=8 ./scripts/publish-local.sh
 
 ## Local AUR mirror
 
-Normal `access-os-extra` builds are mirror-first. Live AUR is now for mirror
-maintenance, not normal publishing.
+Normal `access-os-extra` builds are curated-package-first. The local AUR mirror
+is for maintenance intake, not normal publishing.
 
 Default mirror root:
 
@@ -142,11 +141,23 @@ Import packaging snapshots from the mirror into `pkgbuilds/`:
 ./scripts/import-aur-snapshots.sh
 ```
 
+Promote a reviewed package into `packages/extra/`:
+
+```bash
+./scripts/promote-extra-package.sh <pkgname>
+```
+
+Compare a curated package against the local mirror:
+
+```bash
+./scripts/diff-extra-package-upstream.sh <pkgname>
+```
+
 Recommended local workflow:
 
 ```bash
 ./scripts/sync-aur-mirror.sh
-./scripts/import-aur-snapshots.sh
+./scripts/promote-extra-package.sh <pkgname>
 ./scripts/publish-local.sh
 ```
 
@@ -179,16 +190,16 @@ GitHub Actions also runs a scheduled update-report workflow in
 
 ## Adding packages
 
-### AUR (`access-os-extra`)
-- Edit `package-lists/access-os-extra.txt`.
-- If a package is later **removed from the AUR**, CI will only fall back to a
-  saved snapshot in `pkgbuilds/<pkgname>/`.
-- Confirmed removed packages are tracked automatically in
-  `metadata/removed-from-aur.json` and `metadata/removed-from-aur.txt`.
-- If a removed package later returns to AUR, CI removes it from the removed
-  tracking files automatically.
-- If a listed package is missing from AUR and no saved snapshot exists, the
-  workflow fails so the package list does not silently drift.
+### Extra (`access-os-extra`)
+- Add or maintain approved packages in `packages/extra/<pkgname>/`.
+- Use `./scripts/promote-extra-package.sh <pkgname>` to seed a curated package
+  from the local AUR mirror or `pkgbuilds/`.
+- `package-lists/access-os-extra.txt` remains the transition registry for
+  mirror intake and update tracking while packages are migrated.
+- AUR inspection is explicit:
+  - sync the mirror with `./scripts/sync-aur-mirror.sh`
+  - inspect upstream changes with `./scripts/diff-extra-package-upstream.sh <pkgname>`
+- If a package is not yet curated, normal builds fall back to `pkgbuilds/<pkgname>/`.
 
 ### Core (`access-os-core`)
 - Add a PKGBUILD under `packages/core/<pkgname>/PKGBUILD` (plus any needed files/patches).
@@ -196,10 +207,15 @@ GitHub Actions also runs a scheduled update-report workflow in
 
 ## PKGBUILDs
 
-The `pkgbuilds/` directory stores saved AUR packaging snapshots automatically
-committed during local publishing after each successful AUR package build. These snapshots are
-used only when a package is no longer available from AUR. The saved snapshots
-keep packaging files only; downloaded source payloads are excluded.
+The `pkgbuilds/` directory is now the transition / fallback / archive layer for
+`access-os-extra`.
+
+- preferred source of truth: `packages/extra/<pkg>/`
+- fallback during transition: `pkgbuilds/<pkg>/`
+- maintenance intake source: `~/aur-mirror/<pkg>/`
+
+Saved snapshots still keep packaging files only; downloaded source payloads are
+excluded.
 
 ## Removed AUR tracking
 
@@ -208,7 +224,7 @@ Removed-but-preserved AUR packages are tracked in:
 - `metadata/removed-from-aur.json`: canonical machine-readable registry
 - `metadata/removed-from-aur.txt`: generated package-name list
 
-Local publishing refreshes these files automatically, and CI validates them:
+CI validates these files:
 - when a listed package disappears from AUR but still has a saved fallback in
   `pkgbuilds/`
 - when a previously removed package returns to AUR

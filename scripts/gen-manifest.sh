@@ -85,10 +85,10 @@ if [[ -d "${REPO_ROOT}/packages/core" ]]; then
   done < <(find "${REPO_ROOT}/packages/core" -mindepth 2 -maxdepth 2 -type f -name PKGBUILD -print0 | sort -z)
 fi
 
-# access-os-extra (local mirror first, pkgbuild snapshots second)
+# access-os-extra (curated packages first, pkgbuild snapshots second)
 mapfile -t extra_packages < <(aur_read_extra_packages_file "${EXTRA_LIST_FILE}")
 for pkg in "${extra_packages[@]}"; do
-  if ! pkg_source_dir="$(aur_resolve_package_source_dir "${pkg}")"; then
+  if ! pkg_source_dir="$(aur_resolve_extra_package_source_dir "${pkg}")"; then
     aur_missing+=("${pkg}")
     continue
   fi
@@ -99,9 +99,9 @@ done
 
 if [[ "${#aur_missing[@]}" -gt 0 ]]; then
   {
-    echo "Error: package source(s) not found in the local mirror or pkgbuild snapshots:"
+    echo "Error: package source(s) not found in curated extra packages or pkgbuild snapshots:"
     printf '  - %s\n' "${aur_missing[@]}"
-    echo "Hint: run ./scripts/sync-aur-mirror.sh and ./scripts/import-aur-snapshots.sh"
+    echo "Hint: promote the package into packages/extra/ or import a fallback into pkgbuilds/"
   } >&2
   exit 1
 fi

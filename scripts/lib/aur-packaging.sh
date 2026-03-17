@@ -31,9 +31,21 @@ aur_local_mirror_pkg_dir() {
   printf '%s/%s\n' "$(aur_resolve_mirror_dir)" "${pkg}"
 }
 
+aur_curated_extra_dir() {
+  local pkg="$1"
+  printf '%s/extra/%s\n' "${PACKAGES_DIR:-${REPO_ROOT}/packages}" "${pkg}"
+}
+
 aur_pkgbuild_snapshot_dir() {
   local pkg="$1"
   printf '%s/%s\n' "${PKGBUILDS_DIR:-${REPO_ROOT}/pkgbuilds}" "${pkg}"
+}
+
+aur_curated_extra_has_package() {
+  local pkg="$1"
+  local pkg_dir
+  pkg_dir="$(aur_curated_extra_dir "${pkg}")"
+  [[ -d "${pkg_dir}" && -f "${pkg_dir}/PKGBUILD" ]]
 }
 
 aur_mirror_has_package() {
@@ -116,6 +128,25 @@ aur_resolve_package_source_dir() {
   mirror_dir="$(aur_local_mirror_pkg_dir "${pkg}")"
   if [[ -d "${mirror_dir}" && -f "${mirror_dir}/PKGBUILD" ]]; then
     printf '%s\n' "${mirror_dir}"
+    return 0
+  fi
+
+  snapshot_dir="$(aur_pkgbuild_snapshot_dir "${pkg}")"
+  if [[ -d "${snapshot_dir}" && -f "${snapshot_dir}/PKGBUILD" ]]; then
+    printf '%s\n' "${snapshot_dir}"
+    return 0
+  fi
+
+  return 1
+}
+
+aur_resolve_extra_package_source_dir() {
+  local pkg="$1"
+  local curated_dir snapshot_dir
+
+  curated_dir="$(aur_curated_extra_dir "${pkg}")"
+  if [[ -d "${curated_dir}" && -f "${curated_dir}/PKGBUILD" ]]; then
+    printf '%s\n' "${curated_dir}"
     return 0
   fi
 

@@ -1,6 +1,8 @@
-# AUR packages for access-os-extra (one per line).
+# Transition registry for access-os-extra package intake and update tracking.
 #
 # Lines starting with # and blank lines are ignored.
+# During the hybrid migration, this list still drives mirror sync and update
+# checks even after packages are promoted into packages/extra/.
 
 # Firmware deps for mkinitcpio-firmware (AUR)
 aic94xx-firmware

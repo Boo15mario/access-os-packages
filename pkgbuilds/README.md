@@ -5,8 +5,8 @@ after each successful AUR package build.
 
 ## Purpose
 
-- **AUR removal safety**: If a package is later removed from the AUR, the saved
-  snapshot here is used as a fallback so CI can continue building it.
+- **Transition / fallback layer**: If a package has not yet been promoted into
+  `packages/extra/`, this directory remains the fallback build source.
 - **Build context preservation**: Each subdirectory may contain `PKGBUILD`,
   `.SRCINFO`, patches, install files, or other packaging files needed for a
   rebuild.
@@ -29,8 +29,9 @@ pkgbuilds/
 
 ## Adding a manual PKGBUILD
 
-If a package has been removed from the AUR and no saved PKGBUILD exists yet,
-you can add one manually:
+If a package has been removed from the AUR and no saved PKGBUILD exists yet, or
+if you still need a transition fallback before promoting it into
+`packages/extra/`, you can add one manually:
 
 1. Create `pkgbuilds/<pkgname>/` with `PKGBUILD` and any other required
    packaging files.
@@ -48,3 +49,11 @@ If you maintain a local mirror under `~/aur-mirror` (or another
 
 These imported snapshots remain the in-repo fallback and audit trail when the
 mirror is unavailable or a package later disappears upstream.
+
+Preferred precedence for `access-os-extra` is now:
+
+1. `packages/extra/<pkg>/`
+2. `pkgbuilds/<pkg>/`
+
+So this directory is no longer the preferred normal source once a package has
+been curated into `packages/extra/`.

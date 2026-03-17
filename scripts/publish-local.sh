@@ -109,10 +109,6 @@ ensure_gh_auth() {
   gh auth status >/dev/null 2>&1 || die "GitHub CLI is not authenticated; run: gh auth login"
 }
 
-mirror_ready_for_builds() {
-  aur_mirror_is_usable "${EXTRA_LIST_FILE}"
-}
-
 resolve_pages_base_url() {
   local remote_url parsed owner repo_name
 
@@ -610,7 +606,7 @@ publish_pages_branch() {
 }
 
 commit_repo_metadata() {
-  git -C "${REPO_ROOT}" add metadata/ pkgbuilds/
+  git -C "${REPO_ROOT}" add metadata/ pkgbuilds/ packages/extra/
   if git -C "${REPO_ROOT}" diff --cached --quiet; then
     echo "Info: no pkgbuild or metadata changes to commit"
     return 0
@@ -643,11 +639,7 @@ if [[ "${PREFLIGHT_ONLY}" -eq 1 ]]; then
 fi
 
 if [[ "${PUBLISH_ONLY}" -eq 0 ]]; then
-  if mirror_ready_for_builds; then
-    echo "Info: using local AUR mirror at ${AUR_MIRROR_DIR}; skipping live removed-AUR sync"
-  else
-    "${REPO_ROOT}/scripts/sync-removed-from-aur.sh"
-  fi
+  echo "Info: normal local publishing does not use live AUR; skipping removed-AUR sync"
   ensure_multilib_enabled
   if [[ "${BUILD_ONLY}" -eq 0 ]]; then
     export ARCH CORE_REPO EXTRA_REPO PAGES_BRANCH REMOTE_NAME EXTRA_LIST_FILE AUR_MIRROR_DIR
