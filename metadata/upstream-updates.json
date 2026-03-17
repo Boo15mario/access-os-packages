@@ -1,0 +1,345 @@
+[
+  {
+    "current_version": "0.4.3-1",
+    "latest_version": "",
+    "package": "access-launcher",
+    "source": "local",
+    "status": "check-failed"
+  },
+  {
+    "current_version": "30-10",
+    "latest_version": "",
+    "package": "aic94xx-firmware",
+    "source": "aur",
+    "status": "check-failed"
+  },
+  {
+    "current_version": "37.0.0-1",
+    "latest_version": "",
+    "package": "android-sdk-platform-tools",
+    "source": "aur",
+    "status": "check-failed"
+  },
+  {
+    "current_version": "2025.3.2.6-1",
+    "latest_version": "",
+    "package": "android-studio",
+    "source": "aur",
+    "status": "check-failed"
+  },
+  {
+    "current_version": "501-1",
+    "latest_version": "",
+    "package": "ast-firmware",
+    "source": "aur",
+    "status": "check-failed"
+  },
+  {
+    "current_version": "12.0.1-1",
+    "latest_version": "",
+    "package": "downgrade",
+    "source": "aur",
+    "status": "check-failed"
+  },
+  {
+    "current_version": "1:r3322.4672592d-1",
+    "latest_version": "",
+    "package": "fenrir-git",
+    "source": "aur",
+    "status": "check-failed"
+  },
+  {
+    "current_version": "0.1.5+15+ga45bdc7-1",
+    "latest_version": "",
+    "package": "firmware-manager",
+    "source": "aur",
+    "status": "check-failed"
+  },
+  {
+    "current_version": "2.0.6.r2.g255ec7e-1",
+    "latest_version": "",
+    "package": "gnome-shell-extension-system76-power-git",
+    "source": "aur",
+    "status": "check-failed"
+  },
+  {
+    "current_version": "2.3.14-1",
+    "latest_version": "",
+    "package": "lib32-unixodbc",
+    "source": "aur",
+    "status": "check-failed"
+  },
+  {
+    "current_version": "1:2.1.3-3",
+    "latest_version": "",
+    "package": "minecraft-launcher",
+    "source": "aur",
+    "status": "check-failed"
+  },
+  {
+    "current_version": "1.6.0-1",
+    "latest_version": "",
+    "package": "mkinitcpio-firmware",
+    "source": "aur",
+    "status": "check-failed"
+  },
+  {
+    "current_version": "7.1.0-2",
+    "latest_version": "",
+    "package": "neofetch",
+    "source": "aur",
+    "status": "check-failed"
+  },
+  {
+    "current_version": "25.11.r108.g549148d-2",
+    "latest_version": "",
+    "package": "niri-git",
+    "source": "aur",
+    "status": "check-failed"
+  },
+  {
+    "current_version": "1.0.0-2",
+    "latest_version": "",
+    "package": "noto-color-emoji-fontconfig",
+    "source": "aur",
+    "status": "check-failed"
+  },
+  {
+    "current_version": "1.0-1",
+    "latest_version": "",
+    "package": "official-gamecube-controller-adapter-rules",
+    "source": "aur",
+    "status": "check-failed"
+  },
+  {
+    "current_version": "2.2-1",
+    "latest_version": "",
+    "package": "oldschool-pc-fonts",
+    "source": "aur",
+    "status": "check-failed"
+  },
+  {
+    "current_version": "1.0.2.u-7",
+    "latest_version": "",
+    "package": "openssl-1.0",
+    "source": "aur",
+    "status": "check-failed"
+  },
+  {
+    "current_version": "1.1-1",
+    "latest_version": "",
+    "package": "pacman-cleanup-hook",
+    "source": "aur",
+    "status": "check-failed"
+  },
+  {
+    "current_version": "2.1.0-2",
+    "latest_version": "",
+    "package": "paru",
+    "source": "aur",
+    "status": "check-failed"
+  },
+  {
+    "current_version": "1-9",
+    "latest_version": "",
+    "package": "printer-support",
+    "source": "aur",
+    "status": "check-failed"
+  },
+  {
+    "current_version": "0.5-4",
+    "latest_version": "",
+    "package": "python-inputs",
+    "source": "aur",
+    "status": "check-failed"
+  },
+  {
+    "current_version": "1.17.0-1",
+    "latest_version": "",
+    "package": "python-pdf2image",
+    "source": "aur",
+    "status": "check-failed"
+  },
+  {
+    "current_version": "0.6.3-2",
+    "latest_version": "",
+    "package": "python-ufonormalizer",
+    "source": "aur",
+    "status": "check-failed"
+  },
+  {
+    "current_version": "2021-15",
+    "latest_version": "",
+    "package": "python3-memoizedb",
+    "source": "aur",
+    "status": "check-failed"
+  },
+  {
+    "current_version": "2021-15",
+    "latest_version": "",
+    "package": "python3-xcgf",
+    "source": "aur",
+    "status": "check-failed"
+  },
+  {
+    "current_version": "2021.12-14",
+    "latest_version": "",
+    "package": "python3-xcpf",
+    "source": "aur",
+    "status": "check-failed"
+  },
+  {
+    "current_version": "4.9.9-1",
+    "latest_version": "",
+    "package": "quickemu",
+    "source": "aur",
+    "status": "check-failed"
+  },
+  {
+    "current_version": "r81.9d5f298-1",
+    "latest_version": "",
+    "package": "reflector-pacman-hook-git",
+    "source": "aur",
+    "status": "check-failed"
+  },
+  {
+    "current_version": "3.6.27-6",
+    "latest_version": "",
+    "package": "reiserfsprogs",
+    "source": "aur",
+    "status": "check-failed"
+  },
+  {
+    "current_version": "1-8",
+    "latest_version": "",
+    "package": "samba-support",
+    "source": "aur",
+    "status": "check-failed"
+  },
+  {
+    "current_version": "1.0.2+12+g03a5804-2",
+    "latest_version": "",
+    "package": "system76-acpi-dkms",
+    "source": "aur",
+    "status": "check-failed"
+  },
+  {
+    "current_version": "1.0.18.r7.gcc41a32-2",
+    "latest_version": "",
+    "package": "system76-dkms-git",
+    "source": "aur",
+    "status": "check-failed"
+  },
+  {
+    "current_version": "24.04.14-3",
+    "latest_version": "",
+    "package": "system76-driver",
+    "source": "aur",
+    "status": "check-failed"
+  },
+  {
+    "current_version": "1.0.52.r0.ga900b63-1",
+    "latest_version": "",
+    "package": "system76-firmware-daemon-git",
+    "source": "aur",
+    "status": "check-failed"
+  },
+  {
+    "current_version": "1.0.4-1",
+    "latest_version": "",
+    "package": "system76-io-dkms",
+    "source": "aur",
+    "status": "check-failed"
+  },
+  {
+    "current_version": "0.1.5-2",
+    "latest_version": "",
+    "package": "system76-oled",
+    "source": "aur",
+    "status": "check-failed"
+  },
+  {
+    "current_version": "1.2.8-1",
+    "latest_version": "",
+    "package": "system76-power",
+    "source": "aur",
+    "status": "check-failed"
+  },
+  {
+    "current_version": "20100901.134-1",
+    "latest_version": "",
+    "package": "ttf-mac-fonts",
+    "source": "aur",
+    "status": "check-failed"
+  },
+  {
+    "current_version": "2.0-12",
+    "latest_version": "",
+    "package": "ttf-ms-fonts",
+    "source": "aur",
+    "status": "check-failed"
+  },
+  {
+    "current_version": "1.0-3",
+    "latest_version": "",
+    "package": "ttf-tamil",
+    "source": "aur",
+    "status": "check-failed"
+  },
+  {
+    "current_version": "1.2.1-1",
+    "latest_version": "",
+    "package": "universal-startup-manager",
+    "source": "local",
+    "status": "check-failed"
+  },
+  {
+    "current_version": "1:1.0.0-3",
+    "latest_version": "",
+    "package": "upd72020x-fw",
+    "source": "aur",
+    "status": "check-failed"
+  },
+  {
+    "current_version": "0.0.1-8",
+    "latest_version": "",
+    "package": "update-grub",
+    "source": "aur",
+    "status": "check-failed"
+  },
+  {
+    "current_version": "0.1.285.1-2",
+    "latest_version": "",
+    "package": "virtio-win",
+    "source": "aur",
+    "status": "check-failed"
+  },
+  {
+    "current_version": "1-9",
+    "latest_version": "",
+    "package": "wd719x-firmware",
+    "source": "aur",
+    "status": "check-failed"
+  },
+  {
+    "current_version": "10.0-2",
+    "latest_version": "",
+    "package": "wine-stable",
+    "source": "aur",
+    "status": "check-failed"
+  },
+  {
+    "current_version": "2.4.1-1",
+    "latest_version": "",
+    "package": "zfs-dkms",
+    "source": "aur",
+    "status": "check-failed"
+  },
+  {
+    "current_version": "2.4.1-1",
+    "latest_version": "",
+    "package": "zfs-utils",
+    "source": "aur",
+    "status": "check-failed"
+  }
+]
