@@ -40,6 +40,7 @@ noto-color-emoji-fontconfig
 minecraft-launcher
 fenrir-git
 downgrade
+niri-git
 
 # Android (AUR)
 android-sdk-platform-tools
