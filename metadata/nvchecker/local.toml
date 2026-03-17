@@ -1,9 +1,13 @@
-# Central nvchecker definitions for local/custom packages in this repo.
-#
-# Add one table per package name, for example:
-#
-# [access-os-installer]
-# source = "github"
-# github = "Boo15mario/access-os-installer"
-#
-# This file is intentionally sparse until local/custom package sources are added.
+# nvchecker definitions for local/custom packages in packages/core/.
+
+[access-launcher]
+source = "github"
+github = "boo15mario/access-launcher"
+use_max_tag = false
+use_latest_release = false
+
+[universal-startup-manager]
+source = "github"
+github = "boo15mario/universal-startup-manager"
+use_max_tag = false
+use_latest_release = false
