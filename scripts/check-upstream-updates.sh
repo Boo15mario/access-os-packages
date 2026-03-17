@@ -210,17 +210,22 @@ nvchecker_rc="$?"
 set -e
 
 new_versions_json='{}'
-if [[ -f "${newver_file}" ]]; then
-  while IFS= read -r line; do
-    [[ "${line}" == *=* ]] || continue
-    pkg="${line%%=*}"
-    pkg="${pkg%"${pkg##*[![:space:]]}"}"
-    value="${line#*=}"
-    value="${value#"${value%%[![:space:]]*}"}"
-    value="${value%\"}"
-    value="${value#\"}"
-    new_versions_json="$(jq -c --arg pkg "${pkg}" --arg ver "${value}" '. + {($pkg): $ver}' <<<"${new_versions_json}")"
-  done <"${newver_file}"
+if [[ -f "${newver_file}" && -s "${newver_file}" ]]; then
+  # nvchecker v2+ writes JSON; older versions wrote TOML key=value pairs.
+  if jq -e '.version == 2' "${newver_file}" >/dev/null 2>&1; then
+    new_versions_json="$(jq -c '[.data | to_entries[] | {(.key): .value.version}] | add // {}' "${newver_file}")"
+  else
+    while IFS= read -r line; do
+      [[ "${line}" == *=* ]] || continue
+      pkg="${line%%=*}"
+      pkg="${pkg%"${pkg##*[![:space:]]}"}"
+      value="${line#*=}"
+      value="${value#"${value%%[![:space:]]*}"}"
+      value="${value%\"}"
+      value="${value#\"}"
+      new_versions_json="$(jq -c --arg pkg "${pkg}" --arg ver "${value}" '. + {($pkg): $ver}' <<<"${new_versions_json}")"
+    done <"${newver_file}"
+  fi
 fi
 
 aur_names="$(config_package_names "${AUR_NVCHECKER_TOML}" | jq -R . | jq -s .)"
@@ -276,6 +281,38 @@ if [[ -n "${GITHUB_STEP_SUMMARY:-}" ]]; then
   cat "${UPDATES_MD}" >>"${GITHUB_STEP_SUMMARY}"
 fi
 
+# Print a summary to the terminal.
+update_count="$(jq '[.[] | select(.status == "update-available")] | length' "${UPDATES_JSON}")"
+failed_count="$(jq '[.[] | select(.status == "check-failed")] | length' "${UPDATES_JSON}")"
+total_count="$(jq 'length' "${UPDATES_JSON}")"
+
+echo ""
+echo "Checked ${total_count} packages."
+
+if [[ "${update_count}" -gt 0 ]]; then
+  echo ""
+  echo "Updates available (${update_count}):"
+  jq -r '.[] | select(.status == "update-available") | "  \(.package)  \(.current_version) -> \(.latest_version)"' "${UPDATES_JSON}"
+fi
+
+if [[ "${failed_count}" -gt 0 ]]; then
+  echo ""
+  echo "Check failed (${failed_count}):"
+  jq -r '.[] | select(.status == "check-failed") | "  \(.package)"' "${UPDATES_JSON}"
+fi
+
+up_to_date_count="$(jq '[.[] | select(.status == "up-to-date")] | length' "${UPDATES_JSON}")"
+if [[ "${update_count}" -eq 0 && "${failed_count}" -eq 0 ]]; then
+  echo "All ${up_to_date_count} packages are up to date."
+elif [[ "${up_to_date_count}" -gt 0 ]]; then
+  echo ""
+  echo "${up_to_date_count} packages up to date."
+fi
+
+echo ""
+echo "Full report: ${UPDATES_MD}"
+
 if [[ "${nvchecker_rc}" -ne 0 ]]; then
+  echo ""
   echo "Warning: nvchecker returned a non-zero exit code; check-failed entries were recorded." >&2
 fi

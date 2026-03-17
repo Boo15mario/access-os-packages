@@ -3,11 +3,10 @@
 [access-launcher]
 source = "github"
 github = "boo15mario/access-launcher"
-use_max_tag = false
-use_latest_release = false
+use_latest_commit = true
 
 [universal-startup-manager]
 source = "github"
 github = "boo15mario/universal-startup-manager"
-use_max_tag = false
-use_latest_release = false
+use_max_tag = true
+prefix = "v"

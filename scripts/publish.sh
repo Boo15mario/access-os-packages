@@ -324,9 +324,10 @@ fetch_remote_manifest() {
   local base_url="$1"
   echo "  fetching published manifest..." >&2
   curl -fsSL \
+    -H "Cache-Control: no-cache" \
     --connect-timeout "${PAGES_FETCH_CONNECT_TIMEOUT}" \
     --max-time "${PAGES_FETCH_MAX_TIME}" \
-    "${base_url}/manifest.json" | jq -S .
+    "${base_url}/manifest.json?t=$(date +%s)" | jq -S .
 }
 
 fetch_remote_repo_versions() {
@@ -340,9 +341,10 @@ fetch_remote_repo_versions() {
 
   echo "  fetching published repo DB for ${repo}..." >&2
   curl -fsSL \
+    -H "Cache-Control: no-cache" \
     --connect-timeout "${PAGES_FETCH_CONNECT_TIMEOUT}" \
     --max-time "${PAGES_FETCH_MAX_TIME}" \
-    "${base_url}/${repo}/os/${ARCH}/${repo}.db" -o "${db_file}"
+    "${base_url}/${repo}/os/${ARCH}/${repo}.db?t=$(date +%s)" -o "${db_file}"
   tar -xzf "${db_file}" -C "${tmpdir}"
 
   while IFS=$'\t' read -r pkg ver; do
