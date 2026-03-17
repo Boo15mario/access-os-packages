@@ -6,7 +6,7 @@ usage() {
 Usage: check-builder.sh
 
 Verify that the local Arch Linux system is ready to run
-`scripts/publish-local.sh`.
+`scripts/publish.sh`.
 EOF
 }
 
