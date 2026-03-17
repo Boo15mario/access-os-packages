@@ -762,7 +762,15 @@ build_extra() {
     fi
 
     echo "    using packaging source: ${pkg_source_dir}"
-    cp -a "${pkg_source_dir}" "${pkg_dir}"
+    mkdir -p "${pkg_dir}"
+    rsync -a \
+      --exclude='.git' \
+      --exclude='src/' \
+      --exclude='pkg/' \
+      --exclude='*.pkg.tar.*' \
+      --exclude='*.src.tar.*' \
+      --exclude='*.log' \
+      "${pkg_source_dir}/" "${pkg_dir}/"
 
     import_pgp_keys "${pkg_dir}"
     local -a makepkg_flags=(--syncdeps --noconfirm --clean --cleanbuild --needed)
