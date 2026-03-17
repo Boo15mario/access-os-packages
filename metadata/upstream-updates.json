@@ -120,10 +120,10 @@
   },
   {
     "current_version": "1.0.2.u-7",
-    "latest_version": "",
+    "latest_version": "1.0.2.u-7",
     "package": "openssl-1.0",
     "source": "aur",
-    "status": "check-failed"
+    "status": "up-to-date"
   },
   {
     "current_version": "1.1-1",

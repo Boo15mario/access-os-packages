@@ -19,7 +19,7 @@
 | `noto-color-emoji-fontconfig` | `aur` | `1.0.0-2` | `1.0.0-2` | `up-to-date` |
 | `official-gamecube-controller-adapter-rules` | `aur` | `1.0-1` | `1.0-1` | `up-to-date` |
 | `oldschool-pc-fonts` | `aur` | `2.2-1` | `2.2-1` | `up-to-date` |
-| `openssl-1.0` | `aur` | `1.0.2.u-7` | `` | `check-failed` |
+| `openssl-1.0` | `aur` | `1.0.2.u-7` | `1.0.2.u-7` | `up-to-date` |
 | `pacman-cleanup-hook` | `aur` | `1.1-1` | `1.1-1` | `up-to-date` |
 | `paru` | `aur` | `2.1.0-2` | `2.1.0-2` | `up-to-date` |
 | `printer-support` | `aur` | `1-9` | `1-9` | `up-to-date` |
