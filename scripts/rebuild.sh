@@ -789,6 +789,63 @@ create_repo_db() {
   )
 }
 
+local_repo_versions_from_db() {
+  local repo="$1"
+  local repo_dir="$2"
+  local db_file="${repo_dir}/${repo}.db.tar.gz"
+  local tmpdir json
+
+  [[ -f "${db_file}" ]] || die "missing local repo DB for ${repo}: ${db_file}"
+
+  mkdir -p "${WORK_ROOT}"
+  tmpdir="$(mktemp -d "${WORK_ROOT%/}/local-manifest.XXXXXXXX")"
+  json='{}'
+
+  tar -xzf "${db_file}" -C "${tmpdir}"
+
+  while IFS=$'\t' read -r pkg ver; do
+    [[ -n "${pkg}" && -n "${ver}" ]] || continue
+    json="$(jq -c --arg pkg "${pkg}" --arg ver "${ver}" '. + {($pkg): $ver}' <<<"${json}")"
+  done < <(
+    find "${tmpdir}" -mindepth 2 -maxdepth 2 -type f -name desc -print0 | \
+      xargs -0 awk '
+        BEGIN { pkg=""; ver="" }
+        /^%NAME%$/ { getline; pkg=$0 }
+        /^%VERSION%$/ { getline; ver=$0 }
+        ENDFILE {
+          if (pkg != "" && ver != "") {
+            printf "%s\t%s\n", pkg, ver
+          }
+          pkg=""
+          ver=""
+        }
+      '
+  )
+
+  jq -S . <<<"${json}"
+  rm -rf -- "${tmpdir}"
+}
+
+build_manifest_from_local_dbs() {
+  local core_json extra_json
+
+  core_json="$(local_repo_versions_from_db "${CORE_REPO}" "${DIST_DIR}/${CORE_REPO}/${ARCH}")"
+  extra_json="$(local_repo_versions_from_db "${EXTRA_REPO}" "${DIST_DIR}/${EXTRA_REPO}/${ARCH}")"
+
+  jq -n \
+    --argjson core "${core_json}" \
+    --argjson extra "${extra_json}" \
+    --arg core_repo "${CORE_REPO}" \
+    --arg extra_repo "${EXTRA_REPO}" \
+    '{
+      version: 1,
+      repos: {
+        ($core_repo): { packages: $core },
+        ($extra_repo): { packages: $extra }
+      }
+    }' | jq -S .
+}
+
 if [[ "${STAGE_ONLY}" == "1" ]]; then
   echo "Stage-only mode: skipping package builds and reusing dist/ outputs."
 else
@@ -799,7 +856,11 @@ fi
 create_repo_db "${CORE_REPO}" "${DIST_DIR}/${CORE_REPO}/${ARCH}" "${SITE_DIR}/${CORE_REPO}/os/${ARCH}"
 create_repo_db "${EXTRA_REPO}" "${DIST_DIR}/${EXTRA_REPO}/${ARCH}" "${SITE_DIR}/${EXTRA_REPO}/os/${ARCH}"
 
-"${REPO_ROOT}/scripts/gen-manifest.sh" >"${SITE_DIR}/manifest.json"
+if [[ "${STAGE_ONLY}" == "1" ]]; then
+  build_manifest_from_local_dbs >"${SITE_DIR}/manifest.json"
+else
+  "${REPO_ROOT}/scripts/gen-manifest.sh" >"${SITE_DIR}/manifest.json"
+fi
 
 {
   echo "Built at: $(date -u +%Y-%m-%dT%H:%M:%SZ)"
