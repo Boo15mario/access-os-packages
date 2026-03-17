@@ -447,6 +447,22 @@ mkdir -p "${SITE_DIR}/${CORE_REPO}/os/${ARCH}" "${SITE_DIR}/${EXTRA_REPO}/os/${A
 mkdir -p "${WORK_ROOT}"
 touch "${SITE_DIR}/.nojekyll"
 
+# Bootstrap empty repo DBs so that incremental publishes during the build
+# always have a valid DB for every repo (including repos with no packages yet).
+# The final create_repo_db calls at the end of this script overwrite these with
+# the real content.
+for _bootstrap_repo in "${CORE_REPO}" "${EXTRA_REPO}"; do
+  _bootstrap_dist="${DIST_DIR}/${_bootstrap_repo}/${ARCH}"
+  _bootstrap_site="${SITE_DIR}/${_bootstrap_repo}/os/${ARCH}"
+  if [[ ! -f "${_bootstrap_dist}/${_bootstrap_repo}.db.tar.gz" ]]; then
+    tar -czf "${_bootstrap_dist}/${_bootstrap_repo}.db.tar.gz" --files-from /dev/null
+    tar -czf "${_bootstrap_dist}/${_bootstrap_repo}.files.tar.gz" --files-from /dev/null
+    cp -f "${_bootstrap_dist}/${_bootstrap_repo}.db.tar.gz" "${_bootstrap_site}/${_bootstrap_repo}.db"
+    cp -f "${_bootstrap_dist}/${_bootstrap_repo}.files.tar.gz" "${_bootstrap_site}/${_bootstrap_repo}.files"
+  fi
+done
+unset _bootstrap_repo _bootstrap_dist _bootstrap_site
+
 if [[ "${STAGE_ONLY}" != "1" ]]; then
   work_dir="$(mktemp -d "${WORK_ROOT%/}/rebuild.XXXXXXXX")"
   ACCESS_OS_MANIFEST_CACHE="${work_dir}/desired-manifest.json"
