@@ -12,85 +12,20 @@ require_cmd() {
 
 SCRIPT_DIR="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)"
 REPO_ROOT="$(cd -- "${SCRIPT_DIR}/.." && pwd)"
+source "${SCRIPT_DIR}/lib/aur-packaging.sh"
 
 CORE_REPO="${CORE_REPO:-access-os-core}"
 EXTRA_REPO="${EXTRA_REPO:-access-os-extra}"
 EXTRA_LIST_FILE="${EXTRA_LIST_FILE:-${REPO_ROOT}/package-lists/access-os-extra.txt}"
+PKGBUILDS_DIR="${PKGBUILDS_DIR:-${REPO_ROOT}/pkgbuilds}"
+AUR_MIRROR_DIR="${AUR_MIRROR_DIR:-${HOME}/aur-mirror}"
 
 require_cmd jq
-require_cmd curl
-
-AUR_BATCH_SIZE="${AUR_BATCH_SIZE:-50}"
+aur_require_cmd jq
 
 core_packages_json='{}'
 extra_packages_json='{}'
 aur_missing=()
-aur_query_failed=()
-
-read_extra_packages() {
-  [[ -f "${EXTRA_LIST_FILE}" ]] || return 0
-
-  while IFS= read -r line; do
-    pkg="${line%%#*}"
-    pkg="${pkg#"${pkg%%[![:space:]]*}"}"
-    pkg="${pkg%"${pkg##*[![:space:]]}"}"
-    [[ -z "${pkg}" ]] && continue
-    printf '%s\n' "${pkg}"
-  done <"${EXTRA_LIST_FILE}"
-}
-
-AUR_RPC_URL="${AUR_RPC_URL:-https://aur.archlinux.org/rpc/v5/info}"
-
-fetch_aur_info_batches() {
-  local -a pkgs=("$@")
-  local total index end pkg aur_json
-  local combined='{}'
-
-  total="${#pkgs[@]}"
-  index=0
-
-  while [[ "${index}" -lt "${total}" ]]; do
-    end=$(( index + AUR_BATCH_SIZE ))
-    if [[ "${end}" -gt "${total}" ]]; then
-      end="${total}"
-    fi
-
-    local -a curl_args=(
-      -fsSLG
-      --retry 3
-      --retry-all-errors
-      --connect-timeout 10
-      --max-time 30
-    )
-
-    for pkg in "${pkgs[@]:index:end-index}"; do
-      curl_args+=(--data-urlencode "arg[]=${pkg}")
-    done
-
-    aur_json="$(curl "${curl_args[@]}" "${AUR_RPC_URL}" || true)"
-    if [[ -z "${aur_json}" ]]; then
-      printf '%s\n' "${pkgs[@]:index:end-index}"
-      return 1
-    fi
-
-    combined="$(
-      jq -nc \
-        --argjson old "${combined}" \
-        --argjson batch "${aur_json}" \
-        '
-        $old + (
-          ($batch.results // [])
-          | map(select(.Name != null and .Version != null) | {(.Name): .Version})
-          | add // {}
-        )
-        '
-    )"
-
-    index="${end}"
-  done
-
-  jq -S . <<<"${combined}"
-}
 
 srcinfo_from_dir() {
   local pkg_dir="$1"
@@ -150,50 +85,23 @@ if [[ -d "${REPO_ROOT}/packages/core" ]]; then
   done < <(find "${REPO_ROOT}/packages/core" -mindepth 2 -maxdepth 2 -type f -name PKGBUILD -print0 | sort -z)
 fi
 
-# access-os-extra (AUR)
-mapfile -t extra_packages < <(read_extra_packages)
-aur_versions='{}'
-if [[ "${#extra_packages[@]}" -gt 0 ]]; then
-  set +e
-  aur_versions="$(fetch_aur_info_batches "${extra_packages[@]}")"
-  aur_fetch_rc="$?"
-  set -e
-  if [[ "${aur_fetch_rc}" -ne 0 ]]; then
-    mapfile -t aur_query_failed < <(printf '%s\n' "${aur_versions}")
+# access-os-extra (local mirror first, pkgbuild snapshots second)
+mapfile -t extra_packages < <(aur_read_extra_packages_file "${EXTRA_LIST_FILE}")
+for pkg in "${extra_packages[@]}"; do
+  if ! pkg_source_dir="$(aur_resolve_package_source_dir "${pkg}")"; then
+    aur_missing+=("${pkg}")
+    continue
   fi
-fi
 
-if [[ "${#extra_packages[@]}" -gt 0 && "${#aur_query_failed[@]}" -eq 0 ]]; then
-  for pkg in "${extra_packages[@]}"; do
-    ver="$(jq -r --arg pkg "${pkg}" '.[$pkg] // empty' <<<"${aur_versions}")"
-    if [[ -z "${ver}" || "${ver}" == "null" ]]; then
-      local_pkgbuild_dir="${REPO_ROOT}/pkgbuilds/${pkg}"
-      if [[ -d "${local_pkgbuild_dir}" && -f "${local_pkgbuild_dir}/PKGBUILD" ]]; then
-        echo "Warning: ${pkg} is unavailable from AUR; falling back to saved snapshot in pkgbuilds/${pkg}" >&2
-        pkgbuild_srcinfo="$(srcinfo_from_dir "${local_pkgbuild_dir}")"
-        add_srcinfo_packages extra_packages_json "${pkgbuild_srcinfo}"
-      else
-        aur_missing+=("${pkg}")
-      fi
-      continue
-    fi
-
-    extra_packages_json="$(jq -c --arg name "${pkg}" --arg ver "${ver}" '. + {($name): $ver}' <<<"${extra_packages_json}")"
-  done
-fi
-
-if [[ "${#aur_query_failed[@]}" -gt 0 ]]; then
-  {
-    echo "Error: failed to query AUR for:"
-    printf '  - %s\n' "${aur_query_failed[@]}"
-  } >&2
-  exit 1
-fi
+  pkgbuild_srcinfo="$(srcinfo_from_dir "${pkg_source_dir}")"
+  add_srcinfo_packages extra_packages_json "${pkgbuild_srcinfo}"
+done
 
 if [[ "${#aur_missing[@]}" -gt 0 ]]; then
   {
-    echo "Error: AUR package(s) not found and no saved fallback is available:"
+    echo "Error: package source(s) not found in the local mirror or pkgbuild snapshots:"
     printf '  - %s\n' "${aur_missing[@]}"
+    echo "Hint: run ./scripts/sync-aur-mirror.sh and ./scripts/import-aur-snapshots.sh"
   } >&2
   exit 1
 fi

@@ -8,6 +8,7 @@ die() {
 
 SCRIPT_DIR="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)"
 REPO_ROOT="$(cd -- "${SCRIPT_DIR}/.." && pwd)"
+source "${SCRIPT_DIR}/lib/aur-packaging.sh"
 
 usage() {
   cat <<'EOF'
@@ -58,6 +59,8 @@ ARCH="${ARCH:-x86_64}"
 CORE_REPO="${CORE_REPO:-access-os-core}"
 EXTRA_REPO="${EXTRA_REPO:-access-os-extra}"
 EXTRA_LIST_FILE="${EXTRA_LIST_FILE:-${REPO_ROOT}/package-lists/access-os-extra.txt}"
+PKGBUILDS_DIR="${PKGBUILDS_DIR:-${REPO_ROOT}/pkgbuilds}"
+AUR_MIRROR_DIR="${AUR_MIRROR_DIR:-${HOME}/aur-mirror}"
 DIST_DIR="${DIST_DIR:-${REPO_ROOT}/dist}"
 SITE_DIR="${SITE_DIR:-${REPO_ROOT}/site}"
 WORK_ROOT="${WORK_ROOT:-${REPO_ROOT}/work}"
@@ -493,15 +496,7 @@ build_core() {
 }
 
 read_extra_list() {
-  [[ -f "${EXTRA_LIST_FILE}" ]] || return 0
-
-  while IFS= read -r line; do
-    pkg="${line%%#*}"
-    pkg="${pkg#"${pkg%%[![:space:]]*}"}"
-    pkg="${pkg%"${pkg##*[![:space:]]}"}"
-    [[ -z "${pkg}" ]] && continue
-    printf '%s\n' "${pkg}"
-  done <"${EXTRA_LIST_FILE}"
+  aur_read_extra_packages_file "${EXTRA_LIST_FILE}"
 }
 
 build_extra() {
@@ -541,26 +536,6 @@ build_extra() {
     gpg --batch --keyserver hkps://keyserver.ubuntu.com --recv-keys "${key}" >/dev/null 2>&1 && return 0
     gpg --batch --keyserver hkps://keys.openpgp.org --recv-keys "${key}" >/dev/null 2>&1 && return 0
     return 1
-  }
-
-  aur_package_exists() {
-    local pkg="$1"
-    local aur_json
-
-    aur_json="$(
-      curl -fsSLG \
-        --retry 3 \
-        --retry-all-errors \
-        --connect-timeout 10 \
-        --max-time 30 \
-        --data-urlencode "v=5" \
-        --data-urlencode "type=info" \
-        --data-urlencode "arg[]=${pkg}" \
-        "https://aur.archlinux.org/rpc/" || true
-    )"
-
-    [[ -n "${aur_json}" ]] || return 2
-    [[ "$(jq -r '.resultcount // 0' <<<"${aur_json}")" != "0" ]]
   }
 
   import_pgp_keys() {
@@ -640,87 +615,25 @@ makepkg_with_pgp_retry() {
     done
   }
 
-  save_pkgbuild_snapshot() {
-    local pkg_dir="$1"
-    local save_dir="$2"
-    local item rel_path
-
-    rm -rf -- "${save_dir}"
-    mkdir -p -- "${save_dir}"
-
-    if [[ -d "${pkg_dir}/.git" ]]; then
-      while IFS= read -r -d '' rel_path; do
-        mkdir -p -- "${save_dir}/$(dirname -- "${rel_path}")"
-        cp -a -- "${pkg_dir}/${rel_path}" "${save_dir}/${rel_path}"
-      done < <(git -C "${pkg_dir}" ls-files -z)
-      return 0
-    fi
-
-    (
-      cd "${pkg_dir}"
-      while IFS= read -r -d '' item; do
-        rel_path="${item#./}"
-        mkdir -p -- "${save_dir}/$(dirname -- "${rel_path}")"
-        cp -a -- "${item}" "${save_dir}/${rel_path}"
-      done < <(
-        find . \
-          \( -path './.git' -o -path './src' -o -path './pkg' \) -prune -o \
-          -type f \
-          ! -name '*.pkg.tar.*' \
-          ! -name '*.src.tar.*' \
-          ! -name '*.log' \
-          ! -name '*.tar' \
-          ! -name '*.tar.*' \
-          ! -name '*.zip' \
-          ! -name '*.7z' \
-          ! -name '*.iso' \
-          ! -name '*.img' \
-          ! -name '*.bin' \
-          ! -name '*.exe' \
-          ! -name '*.msi' \
-          ! -size +10M \
-          -print0
-      )
-    )
-  }
-
   echo "Building ${#pkgs[@]} AUR package(s)..."
-  local pkgbuilds_save_dir="${REPO_ROOT}/pkgbuilds"
+  local pkgbuilds_save_dir="${PKGBUILDS_DIR}"
   local -a built_files=()
   mkdir -p "${pkgbuilds_save_dir}"
   for pkg in "${pkgs[@]}"; do
     echo "  - ${pkg}"
     local pkg_dir="${aur_root}/${pkg}"
+    local pkg_source_dir=""
 
     if should_skip_extra_package "${pkg}" "${out_dir}"; then
       continue
     fi
 
-    # Only use a saved snapshot when the package is actually gone from AUR.
-    # Network or transient clone failures should still fail the build.
-    if ! git clone --depth 1 "https://aur.archlinux.org/${pkg}.git" "${pkg_dir}"; then
-      echo "  Warning: failed to clone ${pkg} from AUR" >&2
-
-      local aur_exists_rc
-      set +e
-      aur_package_exists "${pkg}"
-      aur_exists_rc="$?"
-      set -e
-
-      if [[ "${aur_exists_rc}" -eq 0 ]]; then
-        die "failed to clone ${pkg} from AUR even though it still exists"
-      fi
-      if [[ "${aur_exists_rc}" -eq 2 ]]; then
-        die "failed to query AUR after clone failure for ${pkg}"
-      fi
-      if [[ -d "${pkgbuilds_save_dir}/${pkg}" && -f "${pkgbuilds_save_dir}/${pkg}/PKGBUILD" ]]; then
-        echo "    Using saved snapshot from pkgbuilds/${pkg}" >&2
-        mkdir -p "${pkg_dir}"
-        cp -r "${pkgbuilds_save_dir}/${pkg}/." "${pkg_dir}/"
-      else
-        die "${pkg} is unavailable from AUR and no saved fallback exists"
-      fi
+    if ! pkg_source_dir="$(aur_resolve_package_source_dir "${pkg}")"; then
+      die "${pkg} is missing from both $(aur_local_mirror_pkg_dir "${pkg}") and $(aur_pkgbuild_snapshot_dir "${pkg}")"
     fi
+
+    echo "    using packaging source: ${pkg_source_dir}"
+    copy_packaging_snapshot "${pkg_source_dir}" "${pkg_dir}"
 
     import_pgp_keys "${pkg_dir}"
     local -a makepkg_flags=(--syncdeps --noconfirm --clean --cleanbuild --needed)
@@ -730,7 +643,7 @@ makepkg_with_pgp_retry() {
     makepkg_with_pgp_retry "${pkg_dir}" "${pkg}" "${makepkg_flags[@]}"
     mapfile -t built_files < <(resolve_built_package_files "${pkg_dir}" "${out_dir}")
 
-    save_pkgbuild_snapshot "${pkg_dir}" "${pkgbuilds_save_dir}/${pkg}"
+    copy_packaging_snapshot "${pkg_dir}" "${pkgbuilds_save_dir}/${pkg}"
     publish_incrementally "${EXTRA_REPO}" "${pkg}" "${built_files[@]}"
 
     if should_install_after_build "${pkg}"; then

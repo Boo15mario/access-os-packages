@@ -38,7 +38,7 @@ Minimum packages to install:
 Equivalent manual package list:
 
 ```bash
-sudo pacman -S --needed base-devel git curl jq pacman-contrib devtools github-cli
+sudo pacman -S --needed base-devel git curl jq pacman-contrib devtools github-cli nvchecker
 ```
 
 Recommended extras:
@@ -117,6 +117,45 @@ RAM, then cap the result at `15` by default. You can override that at runtime:
 ```bash
 MAKEPKG_JOBS=5 ./scripts/rebuild.sh
 MAKEPKG_JOBS=8 ./scripts/publish-local.sh
+```
+
+## Local AUR mirror
+
+Normal `access-os-extra` builds are mirror-first. Live AUR is now for mirror
+maintenance, not normal publishing.
+
+Default mirror root:
+
+```bash
+~/aur-mirror
+```
+
+Refresh the local AUR mirror:
+
+```bash
+./scripts/sync-aur-mirror.sh
+```
+
+Import packaging snapshots from the mirror into `pkgbuilds/`:
+
+```bash
+./scripts/import-aur-snapshots.sh
+```
+
+Recommended local workflow:
+
+```bash
+./scripts/sync-aur-mirror.sh
+./scripts/import-aur-snapshots.sh
+./scripts/publish-local.sh
+```
+
+If you want a different mirror location:
+
+```bash
+AUR_MIRROR_DIR=/srv/access-os/aur-mirror ./scripts/sync-aur-mirror.sh
+AUR_MIRROR_DIR=/srv/access-os/aur-mirror ./scripts/import-aur-snapshots.sh
+AUR_MIRROR_DIR=/srv/access-os/aur-mirror ./scripts/publish-local.sh
 ```
 
 ## Update Tracking

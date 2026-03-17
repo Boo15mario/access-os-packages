@@ -35,6 +35,7 @@ EOF
 
 SCRIPT_DIR="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)"
 REPO_ROOT="$(cd -- "${SCRIPT_DIR}/.." && pwd)"
+source "${SCRIPT_DIR}/lib/aur-packaging.sh"
 
 ARCH="${ARCH:-x86_64}"
 CORE_REPO="${CORE_REPO:-access-os-core}"
@@ -42,6 +43,8 @@ EXTRA_REPO="${EXTRA_REPO:-access-os-extra}"
 PAGES_BRANCH="${PAGES_BRANCH:-gh-pages}"
 REMOTE_NAME="${REMOTE_NAME:-origin}"
 ACCESS_OS_MANIFEST_CACHE="${ACCESS_OS_MANIFEST_CACHE:-}"
+AUR_MIRROR_DIR="${AUR_MIRROR_DIR:-${HOME}/aur-mirror}"
+EXTRA_LIST_FILE="${EXTRA_LIST_FILE:-${REPO_ROOT}/package-lists/access-os-extra.txt}"
 PAGES_RECONCILE_ATTEMPTS="${PAGES_RECONCILE_ATTEMPTS:-20}"
 PAGES_RECONCILE_DELAY="${PAGES_RECONCILE_DELAY:-6}"
 PAGES_FETCH_CONNECT_TIMEOUT="${PAGES_FETCH_CONNECT_TIMEOUT:-3}"
@@ -94,6 +97,7 @@ require_cmd git
 require_cmd gh
 require_cmd curl
 require_cmd jq
+aur_require_cmd git
 
 ensure_multilib_enabled() {
   if ! grep -Eq '^[[:space:]]*\[multilib\]' /etc/pacman.conf; then
@@ -103,6 +107,10 @@ ensure_multilib_enabled() {
 
 ensure_gh_auth() {
   gh auth status >/dev/null 2>&1 || die "GitHub CLI is not authenticated; run: gh auth login"
+}
+
+mirror_ready_for_builds() {
+  aur_mirror_is_usable "${EXTRA_LIST_FILE}"
 }
 
 resolve_pages_base_url() {
@@ -635,14 +643,19 @@ if [[ "${PREFLIGHT_ONLY}" -eq 1 ]]; then
 fi
 
 if [[ "${PUBLISH_ONLY}" -eq 0 ]]; then
-  "${REPO_ROOT}/scripts/sync-removed-from-aur.sh"
+  if mirror_ready_for_builds; then
+    echo "Info: using local AUR mirror at ${AUR_MIRROR_DIR}; skipping live removed-AUR sync"
+  else
+    "${REPO_ROOT}/scripts/sync-removed-from-aur.sh"
+  fi
   ensure_multilib_enabled
   if [[ "${BUILD_ONLY}" -eq 0 ]]; then
-    export ARCH CORE_REPO EXTRA_REPO PAGES_BRANCH REMOTE_NAME
+    export ARCH CORE_REPO EXTRA_REPO PAGES_BRANCH REMOTE_NAME EXTRA_LIST_FILE AUR_MIRROR_DIR
     export ACCESS_OS_INCREMENTAL_PUBLISH=1
     export ACCESS_OS_INCREMENTAL_NO_PUSH="${NO_PUSH}"
     export ACCESS_OS_PUBLISH_HELPER="${REPO_ROOT}/scripts/publish-local.sh"
   fi
+  export EXTRA_LIST_FILE AUR_MIRROR_DIR
   "${REPO_ROOT}/scripts/rebuild.sh"
 elif ! site_is_staged; then
   echo "Info: site/ is missing staged repo metadata; regenerating it from dist/."
