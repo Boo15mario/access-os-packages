@@ -17,3 +17,5 @@
 /.tmp-*
 .DS_Store
 
+# AUR mirror (git-ignored, synced locally)
+/aur-mirror/
