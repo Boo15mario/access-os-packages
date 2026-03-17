@@ -61,7 +61,7 @@ PAGES_BRANCH="${PAGES_BRANCH:-gh-pages}"
 REMOTE_NAME="${REMOTE_NAME:-origin}"
 
 PAGES_RECONCILE_ATTEMPTS="${PAGES_RECONCILE_ATTEMPTS:-20}"
-PAGES_RECONCILE_DELAY="${PAGES_RECONCILE_DELAY:-6}"
+PAGES_RECONCILE_DELAY="${PAGES_RECONCILE_DELAY:-4}"
 PAGES_FETCH_CONNECT_TIMEOUT="${PAGES_FETCH_CONNECT_TIMEOUT:-3}"
 PAGES_FETCH_MAX_TIME="${PAGES_FETCH_MAX_TIME:-8}"
 
@@ -382,6 +382,7 @@ check_release_assets_for_repo() {
   local assets_json file base_name
   local missing=0
 
+  echo "  checking release assets for ${repo}..." >&2
   assets_json="$(release_assets_json "${repo}")"
 
   shopt -s nullglob
@@ -451,8 +452,10 @@ reconcile_published_state() {
     return 1
   fi
 
+  echo "  manifest matched, verifying repo databases..." >&2
   reconcile_repo_metadata "${CORE_REPO}" "${local_manifest_json}" "${base_url}" || return 1
   reconcile_repo_metadata "${EXTRA_REPO}" "${local_manifest_json}" "${base_url}" || return 1
+  echo "  all checks passed." >&2
 }
 
 reconcile_with_retry() {
