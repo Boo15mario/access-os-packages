@@ -1,0 +1,33 @@
+# Maintainer: Boo15mario
+pkgname=access-launcher
+pkgver=0.4.3
+pkgrel=1
+pkgdesc='GTK4 based app launcher for Linux'
+arch=('x86_64')
+url='https://github.com/boo15mario/access-launcher'
+license=('GPL-3.0-only')
+depends=('gtk4')
+makedepends=('rust' 'cargo')
+_commit='f66d11b1492e6326213f7ffd79b2a86c07a7204d'
+source=("${pkgname}-${pkgver}.tar.gz::${url}/archive/${_commit}.tar.gz")
+sha256sums=('SKIP')
+
+prepare() {
+  cd "${pkgname}-${_commit}"
+  export RUSTUP_TOOLCHAIN=stable
+  cargo fetch --locked --target "$(rustc -vV | sed -n 's/host: //p')"
+}
+
+build() {
+  cd "${pkgname}-${_commit}"
+  export RUSTUP_TOOLCHAIN=stable
+  cargo build --frozen --release
+}
+
+package() {
+  cd "${pkgname}-${_commit}"
+  install -Dm755 "target/release/${pkgname}" "${pkgdir}/usr/bin/${pkgname}"
+  install -Dm644 "${pkgname}.desktop" "${pkgdir}/usr/share/applications/${pkgname}.desktop"
+  install -Dm644 "${pkgname}.svg" "${pkgdir}/usr/share/icons/hicolor/scalable/apps/${pkgname}.svg"
+  install -Dm644 LICENSE "${pkgdir}/usr/share/licenses/${pkgname}/LICENSE"
+}

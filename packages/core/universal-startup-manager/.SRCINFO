@@ -1,0 +1,14 @@
+pkgbase = universal-startup-manager
+	pkgdesc = Universal startup manager for Linux based on GTK4
+	pkgver = 1.2.1
+	pkgrel = 1
+	url = https://github.com/boo15mario/universal-startup-manager
+	arch = x86_64
+	license = GPL-3.0-only
+	makedepends = rust
+	makedepends = cargo
+	depends = gtk4
+	source = universal-startup-manager-1.2.1.tar.gz::https://github.com/boo15mario/universal-startup-manager/archive/ba977557f34814793b31a080ea381ae100705e7a.tar.gz
+	sha256sums = SKIP
+
+pkgname = universal-startup-manager

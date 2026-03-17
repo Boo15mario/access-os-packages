@@ -1,0 +1,14 @@
+pkgbase = access-launcher
+	pkgdesc = GTK4 based app launcher for Linux
+	pkgver = 0.4.3
+	pkgrel = 1
+	url = https://github.com/boo15mario/access-launcher
+	arch = x86_64
+	license = GPL-3.0-only
+	makedepends = rust
+	makedepends = cargo
+	depends = gtk4
+	source = access-launcher-0.4.3.tar.gz::https://github.com/boo15mario/access-launcher/archive/f66d11b1492e6326213f7ffd79b2a86c07a7204d.tar.gz
+	sha256sums = SKIP
+
+pkgname = access-launcher
