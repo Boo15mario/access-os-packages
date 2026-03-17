@@ -9,10 +9,7 @@ on:
       - ".github/workflows/build-repos.yml"
       - "scripts/**"
       - "packages/**"
-      - "package-lists/**"
       - "metadata/**"
-      - "pkgbuilds/**"
-      - "aur-and-custom-packages.md"
       - "README.md"
 
 permissions:
@@ -35,12 +32,12 @@ jobs:
         run: |
           set -euo pipefail
           normalized="$(
-            sed -E 's/#.*$//' package-lists/access-os-extra.txt \
+            sed -E 's/#.*$//' packages/extra.list \
               | awk '{$1=$1; if (NF) print $0}'
           )"
           duplicates="$(printf '%s\n' "${normalized}" | sort | uniq -d)"
           if [[ -n "${duplicates}" ]]; then
-            echo "Duplicate packages found in package-lists/access-os-extra.txt:"
+            echo "Duplicate packages found in packages/extra.list:"
             printf '%s\n' "${duplicates}" | sed 's/^/  - /'
             exit 1
           fi
@@ -66,15 +63,9 @@ jobs:
               chown -R validator:validator /work
               su - validator -c "
                 cd /work
-                export REMOVED_AUR_JSON=/tmp/removed-from-aur.json
-                export REMOVED_AUR_TXT=/tmp/removed-from-aur.txt
-                ./scripts/sync-removed-from-aur.sh
-                ./scripts/check-updates.sh >/tmp/check-updates.log
-                ./scripts/rebuild.sh --dry-run
-                ./scripts/gen-manifest.sh >/tmp/manifest.json
+                ./scripts/build.sh --dry-run
               "
-              jq -e ".version == 1 and (.repos | type == \"object\")" /tmp/manifest.json >/dev/null
             '
 
-      - name: Validate local publish script help
-        run: bash scripts/publish-local.sh --help
+      - name: Validate publish script help
+        run: bash scripts/publish.sh --help

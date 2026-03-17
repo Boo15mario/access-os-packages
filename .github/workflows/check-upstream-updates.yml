@@ -9,9 +9,7 @@ on:
       - ".github/workflows/check-upstream-updates.yml"
       - "scripts/check-upstream-updates.sh"
       - "metadata/nvchecker/**"
-      - "package-lists/**"
       - "packages/**"
-      - "pkgbuilds/**"
       - "README.md"
 
 permissions:
