@@ -44,6 +44,8 @@ REMOTE_NAME="${REMOTE_NAME:-origin}"
 ACCESS_OS_MANIFEST_CACHE="${ACCESS_OS_MANIFEST_CACHE:-}"
 PAGES_RECONCILE_ATTEMPTS="${PAGES_RECONCILE_ATTEMPTS:-20}"
 PAGES_RECONCILE_DELAY="${PAGES_RECONCILE_DELAY:-6}"
+PAGES_FETCH_CONNECT_TIMEOUT="${PAGES_FETCH_CONNECT_TIMEOUT:-5}"
+PAGES_FETCH_MAX_TIME="${PAGES_FETCH_MAX_TIME:-20}"
 
 BUILD_ONLY=0
 PUBLISH_ONLY=0
@@ -371,7 +373,10 @@ stage_incremental_repo_update() {
 
 fetch_remote_manifest() {
   local base_url="$1"
-  curl -fsSL "${base_url}/manifest.json" | jq -S .
+  curl -fsSL \
+    --connect-timeout "${PAGES_FETCH_CONNECT_TIMEOUT}" \
+    --max-time "${PAGES_FETCH_MAX_TIME}" \
+    "${base_url}/manifest.json" | jq -S .
 }
 
 fetch_remote_repo_versions() {
@@ -383,7 +388,10 @@ fetch_remote_repo_versions() {
   db_file="${tmpdir}/${repo}.db.tar.gz"
   json='{}'
 
-  curl -fsSL "${base_url}/${repo}/os/${ARCH}/${repo}.db" -o "${db_file}"
+  curl -fsSL \
+    --connect-timeout "${PAGES_FETCH_CONNECT_TIMEOUT}" \
+    --max-time "${PAGES_FETCH_MAX_TIME}" \
+    "${base_url}/${repo}/os/${ARCH}/${repo}.db" -o "${db_file}"
   tar -xzf "${db_file}" -C "${tmpdir}"
 
   while IFS=$'\t' read -r pkg ver; do
@@ -499,6 +507,7 @@ reconcile_with_retry() {
 
   local attempt
   for (( attempt = 1; attempt <= PAGES_RECONCILE_ATTEMPTS; attempt++ )); do
+    echo "Waiting for GitHub Pages propagation (${attempt}/${PAGES_RECONCILE_ATTEMPTS})..."
     if reconcile_published_state; then
       return 0
     fi
@@ -510,6 +519,7 @@ reconcile_with_retry() {
   echo "Warning: published state mismatch detected; retrying GitHub Pages publish once" >&2
   publish_pages_branch
   for (( attempt = 1; attempt <= PAGES_RECONCILE_ATTEMPTS; attempt++ )); do
+    echo "Waiting for GitHub Pages propagation after retry (${attempt}/${PAGES_RECONCILE_ATTEMPTS})..."
     if reconcile_published_state; then
       return 0
     fi
