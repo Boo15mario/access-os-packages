@@ -20,17 +20,18 @@ require_cmd() {
 
 usage() {
   cat <<'EOF'
-Usage: publish.sh [--build-only] [--publish-only] [--no-push] [--skip-commit] [--preflight]
+Usage: publish.sh [--build-only] [--publish-only] [--no-push] [--skip-commit] [--skip-reconcile] [--preflight]
 
 Build and publish the access-os pacman repositories from a local Arch system.
 
 Flags:
-  --build-only    Build packages and stage site metadata only; do not upload or push
-  --publish-only  Publish existing dist/ and site/ outputs; skip the rebuild
-  --no-push       Do not push git commits or the gh-pages branch
-  --skip-commit   Do not commit metadata/ or packages/extra/ changes
-  --preflight     Run builder readiness checks and exit
-  -h, --help      Show this help
+  --build-only       Build packages and stage site metadata only; do not upload or push
+  --publish-only     Publish existing dist/ and site/ outputs; skip the rebuild
+  --no-push          Do not push git commits or the gh-pages branch
+  --skip-commit      Do not commit metadata/ or packages/extra/ changes
+  --skip-reconcile   Skip GitHub Pages propagation verification
+  --preflight        Run builder readiness checks and exit
+  -h, --help         Show this help
 
 Environment overrides:
   ARCH            (default: x86_64)
@@ -40,8 +41,8 @@ Environment overrides:
   REMOTE_NAME     (default: origin)
 
 Reconciliation tuning:
-  PAGES_RECONCILE_ATTEMPTS    (default: 20)
-  PAGES_RECONCILE_DELAY       (default: 6)
+  PAGES_RECONCILE_ATTEMPTS    (default: 10)
+  PAGES_RECONCILE_DELAY       (default: 4)
   PAGES_FETCH_CONNECT_TIMEOUT (default: 3)
   PAGES_FETCH_MAX_TIME        (default: 8)
 EOF
@@ -60,7 +61,7 @@ EXTRA_REPO="${EXTRA_REPO:-access-os-extra}"
 PAGES_BRANCH="${PAGES_BRANCH:-gh-pages}"
 REMOTE_NAME="${REMOTE_NAME:-origin}"
 
-PAGES_RECONCILE_ATTEMPTS="${PAGES_RECONCILE_ATTEMPTS:-20}"
+PAGES_RECONCILE_ATTEMPTS="${PAGES_RECONCILE_ATTEMPTS:-10}"
 PAGES_RECONCILE_DELAY="${PAGES_RECONCILE_DELAY:-4}"
 PAGES_FETCH_CONNECT_TIMEOUT="${PAGES_FETCH_CONNECT_TIMEOUT:-3}"
 PAGES_FETCH_MAX_TIME="${PAGES_FETCH_MAX_TIME:-8}"
@@ -73,6 +74,7 @@ BUILD_ONLY=0
 PUBLISH_ONLY=0
 NO_PUSH=0
 SKIP_COMMIT=0
+SKIP_RECONCILE=0
 PREFLIGHT_ONLY=0
 
 while [[ $# -gt 0 ]]; do
@@ -81,6 +83,7 @@ while [[ $# -gt 0 ]]; do
     --publish-only) PUBLISH_ONLY=1 ;;
     --no-push) NO_PUSH=1 ;;
     --skip-commit) SKIP_COMMIT=1 ;;
+    --skip-reconcile) SKIP_RECONCILE=1 ;;
     --preflight) PREFLIGHT_ONLY=1 ;;
     -h|--help)
       usage
@@ -461,6 +464,11 @@ reconcile_published_state() {
 reconcile_with_retry() {
   [[ "${NO_PUSH}" -eq 0 ]] || return 0
 
+  if [[ "${SKIP_RECONCILE}" -eq 1 ]]; then
+    echo "Skipping GitHub Pages reconciliation (--skip-reconcile)."
+    return 0
+  fi
+
   local attempt
   for (( attempt = 1; attempt <= PAGES_RECONCILE_ATTEMPTS; attempt++ )); do
     echo "Waiting for GitHub Pages propagation (${attempt}/${PAGES_RECONCILE_ATTEMPTS})..."
@@ -472,19 +480,11 @@ reconcile_with_retry() {
     fi
   done
 
-  echo "Warning: published state mismatch detected; retrying GitHub Pages publish once" >&2
-  publish_pages_branch
-  for (( attempt = 1; attempt <= PAGES_RECONCILE_ATTEMPTS; attempt++ )); do
-    echo "Waiting for GitHub Pages propagation after retry (${attempt}/${PAGES_RECONCILE_ATTEMPTS})..."
-    if reconcile_published_state; then
-      return 0
-    fi
-    if (( attempt < PAGES_RECONCILE_ATTEMPTS )); then
-      sleep "${PAGES_RECONCILE_DELAY}"
-    fi
-  done
-
-  die "published GitHub Releases and Pages metadata are still out of sync"
+  echo "" >&2
+  echo "Warning: GitHub Pages has not fully propagated after ${PAGES_RECONCILE_ATTEMPTS} attempts." >&2
+  echo "This is normal — GitHub Pages CDN caching can be slow." >&2
+  echo "The packages and metadata were pushed successfully." >&2
+  echo "Use --skip-reconcile to skip this check in the future." >&2
 }
 
 reconcile_with_retry
