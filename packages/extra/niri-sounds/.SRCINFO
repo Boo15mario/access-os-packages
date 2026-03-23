@@ -1,0 +1,13 @@
+pkgbase = niri-sounds
+	pkgdesc = Simple Niri event sound script
+	pkgver = r1.7afefbd
+	pkgrel = 1
+	url = https://github.com/destructatron/niri-sounds
+	arch = any
+	license = MIT
+	depends = python
+	depends = sox
+	source = niri-sounds-r1.7afefbd.tar.gz::https://github.com/destructatron/niri-sounds/archive/7afefbd87cf69902cf5e2897fde79a777aab747f.tar.gz
+	sha256sums = SKIP
+
+pkgname = niri-sounds

@@ -1,0 +1,15 @@
+pkgbase = soundthemed
+	pkgdesc = Freedesktop sound theme daemon for Wayland desktops
+	pkgver = r1.dc26686
+	pkgrel = 1
+	url = https://github.com/destructatron/soundthemed
+	arch = x86_64
+	license = MIT
+	makedepends = rust
+	makedepends = cargo
+	depends = pipewire
+	depends = sound-theme-freedesktop
+	source = soundthemed-r1.dc26686.tar.gz::https://github.com/destructatron/soundthemed/archive/dc266868ef52eb8228fb510ab7866412ce9fa3c5.tar.gz
+	sha256sums = SKIP
+
+pkgname = soundthemed

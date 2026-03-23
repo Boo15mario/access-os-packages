@@ -1,0 +1,21 @@
+# Maintainer: Boo15mario
+pkgname=waynotify
+pkgver=0.2
+pkgrel=1
+pkgdesc='Accessible notification daemon for Wayland with screen reader support'
+arch=('any')
+url='https://github.com/destructatron/waynotify'
+license=('MIT')
+depends=('python' 'python-gobject' 'python-dasbus' 'gtk3' 'gtk-layer-shell' 'at-spi2-core')
+makedepends=()
+_commit='213f9266594a00090a276ef9ae956eafd3f9a25f'
+source=("${pkgname}-${pkgver}.tar.gz::${url}/archive/refs/tags/v${pkgver}.tar.gz")
+sha256sums=('SKIP')
+
+package() {
+  cd "${pkgname}-${pkgver}"
+  install -Dm755 src/waynotify "${pkgdir}/usr/bin/waynotify"
+  install -Dm755 src/waynotify-client "${pkgdir}/usr/bin/waynotify-client"
+  install -Dm644 LICENSE "${pkgdir}/usr/share/licenses/${pkgname}/LICENSE"
+  install -Dm644 README.md "${pkgdir}/usr/share/doc/${pkgname}/README.md"
+}

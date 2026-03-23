@@ -1,0 +1,17 @@
+pkgbase = waynotify
+	pkgdesc = Accessible notification daemon for Wayland with screen reader support
+	pkgver = 0.2
+	pkgrel = 1
+	url = https://github.com/destructatron/waynotify
+	arch = any
+	license = MIT
+	depends = python
+	depends = python-gobject
+	depends = python-dasbus
+	depends = gtk3
+	depends = gtk-layer-shell
+	depends = at-spi2-core
+	source = waynotify-0.2.tar.gz::https://github.com/destructatron/waynotify/archive/refs/tags/v0.2.tar.gz
+	sha256sums = SKIP
+
+pkgname = waynotify

@@ -1,0 +1,14 @@
+pkgbase = xdg-chooser
+	pkgdesc = Desktop-agnostic default application chooser for Linux
+	pkgver = r1.5c5df2d
+	pkgrel = 1
+	url = https://github.com/destructatron/xdg-chooser
+	arch = x86_64
+	license = MIT
+	makedepends = rust
+	makedepends = cargo
+	depends = gtk4
+	source = xdg-chooser-r1.5c5df2d.tar.gz::https://github.com/destructatron/xdg-chooser/archive/5c5df2d45b07d5e3d7fe8b1e0bc0ad3c04d31445.tar.gz
+	sha256sums = SKIP
+
+pkgname = xdg-chooser

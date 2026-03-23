@@ -1,0 +1,18 @@
+pkgbase = wayvol
+	pkgdesc = Accessible GTK4 PipeWire volume mixer for Wayland
+	pkgver = r1.a15f502
+	pkgrel = 1
+	url = https://github.com/destructatron/wayvol
+	arch = x86_64
+	license = MIT
+	makedepends = rust
+	makedepends = cargo
+	depends = gtk4
+	depends = libadwaita
+	depends = wireplumber
+	depends = pipewire
+	depends = pipewire-pulse
+	source = wayvol-r1.a15f502.tar.gz::https://github.com/destructatron/wayvol/archive/a15f502e5a5ce5a9661803a67c37d7cae82f1c91.tar.gz
+	sha256sums = SKIP
+
+pkgname = wayvol

@@ -1,0 +1,21 @@
+pkgbase = waygreet
+	pkgdesc = Accessibility-first Wayland GTK greeter for greetd
+	pkgver = r1.58178bd
+	pkgrel = 1
+	url = https://github.com/destructatron/waygreet
+	arch = x86_64
+	license = MIT
+	makedepends = rust
+	makedepends = cargo
+	depends = gtk4
+	depends = libadwaita
+	depends = gtk4-layer-shell
+	depends = greetd
+	depends = cage
+	depends = orca
+	depends = pipewire
+	depends = dbus
+	source = waygreet-r1.58178bd.tar.gz::https://github.com/destructatron/waygreet/archive/58178bddb0af99777df37347f59493d206e5edc1.tar.gz
+	sha256sums = SKIP
+
+pkgname = waygreet

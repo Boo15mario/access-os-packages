@@ -1,0 +1,33 @@
+# Maintainer: Boo15mario
+pkgname=xdg-chooser
+pkgver=r1.5c5df2d
+pkgrel=1
+pkgdesc='Desktop-agnostic default application chooser for Linux'
+arch=('x86_64')
+url='https://github.com/destructatron/xdg-chooser'
+license=('MIT')
+depends=('gtk4')
+makedepends=('rust' 'cargo')
+_commit='5c5df2d45b07d5e3d7fe8b1e0bc0ad3c04d31445'
+source=("${pkgname}-${pkgver}.tar.gz::${url}/archive/${_commit}.tar.gz")
+sha256sums=('SKIP')
+
+prepare() {
+  cd "${pkgname}-${_commit}"
+  export RUSTUP_TOOLCHAIN=stable
+  cargo fetch --locked --target "$(rustc -vV | sed -n 's/host: //p')"
+}
+
+build() {
+  cd "${pkgname}-${_commit}"
+  export RUSTUP_TOOLCHAIN=stable
+  cargo build --frozen --release
+}
+
+package() {
+  cd "${pkgname}-${_commit}"
+  install -Dm755 target/release/xdg-chooser "${pkgdir}/usr/bin/xdg-chooser"
+  install -Dm644 data/xdg-chooser.desktop "${pkgdir}/usr/share/applications/xdg-chooser.desktop"
+  install -Dm644 LICENSE "${pkgdir}/usr/share/licenses/${pkgname}/LICENSE"
+  install -Dm644 README.md "${pkgdir}/usr/share/doc/${pkgname}/README.md"
+}

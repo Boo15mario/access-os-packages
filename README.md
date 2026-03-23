@@ -2,6 +2,10 @@
 
 Two pacman repositories for Access OS (Arch Linux based):
 
+## Project docs
+
+- [`docs/niri-package-onboarding.md`](./docs/niri-package-onboarding.md) — package work needed for the Niri desktop profile
+
 - `access-os-core`: Access OS maintained packages (PKGBUILDs live in this repo)
 - `access-os-extra`: curated extra packages built locally on your Arch system
 

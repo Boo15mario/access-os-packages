@@ -1,0 +1,15 @@
+pkgbase = wayclip
+	pkgdesc = Clipboard history manager for Wayland with daemon and GTK4 client
+	pkgver = 0.1.1
+	pkgrel = 1
+	url = https://github.com/destructatron/wayclip
+	arch = x86_64
+	license = MIT
+	makedepends = rust
+	makedepends = cargo
+	depends = gtk4
+	depends = wl-clipboard
+	source = wayclip-0.1.1.tar.gz::https://github.com/destructatron/wayclip/archive/refs/heads/main.tar.gz
+	sha256sums = SKIP
+
+pkgname = wayclip

@@ -1,0 +1,32 @@
+# Maintainer: Boo15mario
+pkgname=waytray
+pkgver=1.0.5
+pkgrel=1
+pkgdesc='Accessible, compositor-agnostic system tray for Linux'
+arch=('x86_64')
+url='https://github.com/destructatron/waytray'
+license=('MIT')
+depends=('gtk4' 'gstreamer' 'pipewire-pulse')
+makedepends=('rust' 'cargo')
+source=("${pkgname}-${pkgver}.tar.gz::${url}/archive/refs/tags/v${pkgver}.tar.gz")
+sha256sums=('SKIP')
+
+prepare() {
+  cd "${pkgname}-${pkgver}"
+  export RUSTUP_TOOLCHAIN=stable
+  cargo fetch --target "$(rustc -vV | sed -n 's/host: //p')"
+}
+
+build() {
+  cd "${pkgname}-${pkgver}"
+  export RUSTUP_TOOLCHAIN=stable
+  cargo build --release --workspace
+}
+
+package() {
+  cd "${pkgname}-${pkgver}"
+  install -Dm755 target/release/waytray "${pkgdir}/usr/bin/waytray"
+  install -Dm755 target/release/waytray-daemon "${pkgdir}/usr/bin/waytray-daemon"
+  install -Dm644 LICENSE "${pkgdir}/usr/share/licenses/${pkgname}/LICENSE"
+  install -Dm644 README.md "${pkgdir}/usr/share/doc/${pkgname}/README.md"
+}

@@ -1,0 +1,16 @@
+pkgbase = waytray
+	pkgdesc = Accessible, compositor-agnostic system tray for Linux
+	pkgver = 1.0.5
+	pkgrel = 1
+	url = https://github.com/destructatron/waytray
+	arch = x86_64
+	license = MIT
+	makedepends = rust
+	makedepends = cargo
+	depends = gtk4
+	depends = gstreamer
+	depends = pipewire-pulse
+	source = waytray-1.0.5.tar.gz::https://github.com/destructatron/waytray/archive/refs/tags/v1.0.5.tar.gz
+	sha256sums = SKIP
+
+pkgname = waytray

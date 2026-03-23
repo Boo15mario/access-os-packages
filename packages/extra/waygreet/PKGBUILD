@@ -1,0 +1,36 @@
+# Maintainer: Boo15mario
+pkgname=waygreet
+pkgver=r1.58178bd
+pkgrel=1
+pkgdesc='Accessibility-first Wayland GTK greeter for greetd'
+arch=('x86_64')
+url='https://github.com/destructatron/waygreet'
+license=('MIT')
+depends=('gtk4' 'libadwaita' 'gtk4-layer-shell' 'greetd' 'cage' 'orca' 'pipewire' 'dbus')
+makedepends=('rust' 'cargo')
+_commit='58178bddb0af99777df37347f59493d206e5edc1'
+source=("${pkgname}-${pkgver}.tar.gz::${url}/archive/${_commit}.tar.gz")
+sha256sums=('SKIP')
+
+prepare() {
+  cd "${pkgname}-${_commit}"
+  export RUSTUP_TOOLCHAIN=stable
+  cargo fetch --locked --target "$(rustc -vV | sed -n 's/host: //p')"
+}
+
+build() {
+  cd "${pkgname}-${_commit}"
+  export RUSTUP_TOOLCHAIN=stable
+  cargo build --frozen --release
+}
+
+package() {
+  cd "${pkgname}-${_commit}"
+  install -Dm755 target/release/waygreet "${pkgdir}/usr/bin/waygreet"
+  install -Dm644 data/waygreet.css "${pkgdir}/usr/share/waygreet/waygreet.css"
+  install -Dm644 data/waygreet-high-contrast.css "${pkgdir}/usr/share/waygreet/waygreet-high-contrast.css"
+  install -Dm644 data/waygreet.toml.example "${pkgdir}/usr/share/doc/${pkgname}/waygreet.toml.example"
+  install -Dm644 systemd/waygreet-orca.service "${pkgdir}/usr/lib/systemd/user/waygreet-orca.service"
+  install -Dm644 LICENSE "${pkgdir}/usr/share/licenses/${pkgname}/LICENSE"
+  install -Dm644 README.md "${pkgdir}/usr/share/doc/${pkgname}/README.md"
+}

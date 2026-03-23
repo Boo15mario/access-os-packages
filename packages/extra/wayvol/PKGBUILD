@@ -1,0 +1,31 @@
+# Maintainer: Boo15mario
+pkgname=wayvol
+pkgver=r1.a15f502
+pkgrel=1
+pkgdesc='Accessible GTK4 PipeWire volume mixer for Wayland'
+arch=('x86_64')
+url='https://github.com/destructatron/wayvol'
+license=('MIT')
+depends=('gtk4' 'libadwaita' 'wireplumber' 'pipewire' 'pipewire-pulse')
+makedepends=('rust' 'cargo')
+_commit='a15f502e5a5ce5a9661803a67c37d7cae82f1c91'
+source=("${pkgname}-${pkgver}.tar.gz::${url}/archive/${_commit}.tar.gz")
+sha256sums=('SKIP')
+
+prepare() {
+  cd "${pkgname}-${_commit}"
+  export RUSTUP_TOOLCHAIN=stable
+  cargo fetch --locked --target "$(rustc -vV | sed -n 's/host: //p')"
+}
+
+build() {
+  cd "${pkgname}-${_commit}"
+  export RUSTUP_TOOLCHAIN=stable
+  cargo build --frozen --release
+}
+
+package() {
+  cd "${pkgname}-${_commit}"
+  install -Dm755 target/release/wayvol "${pkgdir}/usr/bin/wayvol"
+  install -Dm644 README.md "${pkgdir}/usr/share/doc/${pkgname}/README.md"
+}

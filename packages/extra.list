@@ -38,6 +38,15 @@ minecraft-launcher
 fenrir-git
 downgrade
 niri-git
+waynotify
+niri-sounds
+waygreet
+xdg-chooser
+wayclip
+wayvol
+waytray
+soundthemed
+google-cloud-cli
 
 # Android (AUR)
 android-sdk-platform-tools
