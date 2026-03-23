@@ -12,25 +12,21 @@ source=("${pkgname}-${pkgver}.tar.gz::${url}/archive/refs/heads/main.tar.gz")
 sha256sums=('SKIP')
 
 prepare() {
-  cd "wayclip-main"
-  export RUSTUP_TOOLCHAIN=stable
-  # Force bundled sqlite
-  export LIBSQLITE3_SYS_USE_PKG_CONFIG=0
-  export LIBSQLITE3_SYS_STATIC=1
+  cd "${pkgname}-${pkgver}"
+  # Build deps separately to avoid makepkg linking issues
+  cargo fetch --locked --target "$(rustc -vV | sed -n 's/host: //p')" 2>/dev/null || \
   cargo fetch --target "$(rustc -vV | sed -n 's/host: //p')"
 }
 
 build() {
-  cd "wayclip-main"
-  export RUSTUP_TOOLCHAIN=stable
-  export LIBSQLITE3_SYS_USE_PKG_CONFIG=0  
-  export LIBSQLITE3_SYS_STATIC=1
-  export RUSTFLAGS="-C linker=gcc"
+  cd "${pkgname}-${pkgver}"
+  # Use direct cargo build instead of makepkg's build to avoid linking issues
+  unset RUSTFLAGS
   cargo build --release --workspace
 }
 
 package() {
-  cd "wayclip-main"
+  cd "${pkgname}-${pkgver}"
   install -Dm755 target/release/wayclip "${pkgdir}/usr/bin/wayclip"
   install -Dm755 target/release/wayclip-daemon "${pkgdir}/usr/bin/wayclip-daemon"
   install -Dm644 LICENSE "${pkgdir}/usr/share/licenses/${pkgname}/LICENSE"

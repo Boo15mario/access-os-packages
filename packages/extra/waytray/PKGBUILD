@@ -13,13 +13,14 @@ sha256sums=('SKIP')
 
 prepare() {
   cd "${pkgname}-${pkgver}"
-  export RUSTUP_TOOLCHAIN=stable
+  cargo fetch --locked --target "$(rustc -vV | sed -n 's/host: //p')" 2>/dev/null || \
   cargo fetch --target "$(rustc -vV | sed -n 's/host: //p')"
 }
 
 build() {
   cd "${pkgname}-${pkgver}"
-  export RUSTUP_TOOLCHAIN=stable
+  # Use direct cargo build to avoid makepkg linking issues
+  unset RUSTFLAGS
   cargo build --release --workspace
 }
 
