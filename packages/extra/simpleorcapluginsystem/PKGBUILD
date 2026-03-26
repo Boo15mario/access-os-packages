@@ -1,0 +1,39 @@
+# Maintainer: Chrys <chrys@linux-a11y.org>
+# Contributor: AccessOS <access-os@boo15mario.boo>
+
+_gitname='simple-orca-plugin-system'
+pkgname="${_gitname}"
+pkgver=1.01
+pkgrel=1
+pkgdesc='Simple Orca Plugin System (SOPS) - Extend Orca screen reader functionality'
+arch=('any')
+url="https://github.com/chrys87/$_gitname"
+license=('GPL3')
+depends=('orca' 'python' 'python-dbus')
+optdepends=('speech-dispatcher: For speech output in plugins')
+makedepends=()
+provides=('simpleorcapluginsystem')
+conflicts=('simpleorcapluginsystem-git')
+source=("https://github.com/chrys87/${_gitname}/archive/refs/tags/${pkgver}.tar.gz")
+sha512sums=('fd46cc7d4fcb79e434264971067a75f64854ef12cc195a51bc462f428788db74b7e2b8e04ceae30a16f86c35aa1c6a386bce3f80923092e0c4662fa9c218d8f8')
+
+package()
+{
+  cd "$srcdir/$_gitname-$pkgver"
+  
+  # Install main files
+  install -d "$pkgdir/usr/share/SOPS"
+  cp -r . "$pkgdir/usr/share/SOPS/" --exclude=.git
+  
+  # Install scripts
+  install -d "$pkgdir/usr/bin"
+  install -m755 tools/ensop "$pkgdir/usr/bin/ensop"
+  install -m755 tools/dissop "$pkgdir/usr/bin/dissop"
+  
+  # Install man page if exists
+  if [[ -f doc/simpleorcapluginsystem.1 ]]; then
+    install -Dm644 doc/simpleorcapluginsystem.1 "$pkgdir/usr/share/man/man1/simpleorcapluginsystem.1"
+  fi
+}
+
+# vim: set ts=2 sw=2 et:

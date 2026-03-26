@@ -12,7 +12,12 @@ source=("${pkgname}-${pkgver}.tar.gz::${url}/archive/refs/heads/main.tar.gz")
 sha256sums=('SKIP')
 
 prepare() {
+  cd "${srcdir}"
+  # The GitHub archive extracts to wayclip-main, rename to expected name
+  mv wayclip-main "${pkgname}-${pkgver}"
   cd "${pkgname}-${pkgver}"
+  # Remove 'bundled' feature from rusqlite to use system sqlite3
+  sed -i 's/features = \["bundled", "blob"\]/features = ["blob"]/' Cargo.toml
   # Build deps separately to avoid makepkg linking issues
   cargo fetch --locked --target "$(rustc -vV | sed -n 's/host: //p')" 2>/dev/null || \
   cargo fetch --target "$(rustc -vV | sed -n 's/host: //p')"
@@ -20,7 +25,7 @@ prepare() {
 
 build() {
   cd "${pkgname}-${pkgver}"
-  # Use direct cargo build instead of makepkg's build to avoid linking issues
+  # Use system sqlite3 via pkg-config
   unset RUSTFLAGS
   cargo build --release --workspace
 }

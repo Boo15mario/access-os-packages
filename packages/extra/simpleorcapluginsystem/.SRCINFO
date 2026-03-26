@@ -1,0 +1,17 @@
+pkgbase = simpleorcapluginsystem
+	pkgdesc = Simple Orca Plugin System (SOPS) - Extend Orca screen reader functionality
+	pkgver = 1.01
+	pkgrel = 1
+	url = https://github.com/chrys87/simple-orca-plugin-system
+	arch = any
+	license = GPL3
+	depends = orca
+	depends = python
+	depends = python-dbus
+	optdepends = speech-dispatcher: For speech output in plugins
+	provides = simpleorcapluginsystem
+	conflicts = simpleorcapluginsystem-git
+	source = https://github.com/chrys87/simple-orca-plugin-system/archive/refs/tags/1.01.tar.gz
+	sha512sums = SKIP
+
+	pkgname = simpleorcapluginsystem
