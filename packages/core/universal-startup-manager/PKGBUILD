@@ -15,13 +15,12 @@ sha256sums=('SKIP')
 prepare() {
   cd "${pkgname}-${_commit}"
   export RUSTUP_TOOLCHAIN=stable
-  cargo fetch --locked --target "$(rustc -vV | sed -n 's/host: //p')"
 }
 
 build() {
   cd "${pkgname}-${_commit}"
   export RUSTUP_TOOLCHAIN=stable
-  cargo build --frozen --release
+  cargo build --release
 }
 
 package() {

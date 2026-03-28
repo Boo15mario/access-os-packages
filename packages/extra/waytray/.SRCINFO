@@ -1,16 +1,19 @@
 pkgbase = waytray
-	pkgdesc = Accessible, compositor-agnostic system tray for Linux
-	pkgver = 1.0.5
+	pkgdesc = Wayland system tray with daemon/client architecture
+	pkgver = 1.0.1
 	pkgrel = 1
 	url = https://github.com/destructatron/waytray
+	arch = aarch64
 	arch = x86_64
 	license = MIT
 	makedepends = rust
 	makedepends = cargo
 	depends = gtk4
 	depends = gstreamer
-	depends = pipewire-pulse
-	source = waytray-1.0.5.tar.gz::https://github.com/destructatron/waytray/archive/refs/tags/v1.0.5.tar.gz
-	sha256sums = SKIP
+	depends = dbus
+	optdepends = pipewire-pulse: for audio volume control module
+	optdepends = power-profiles-daemon: for power profile switching
+	source = waytray-1.0.1.tar.gz::https://github.com/destructatron/waytray/archive/refs/tags/v1.0.1.tar.gz
+	sha256sums = 5a9e2652cb0ec252305c55087212500193466b94a1701710e751937b63b87223
 
 pkgname = waytray

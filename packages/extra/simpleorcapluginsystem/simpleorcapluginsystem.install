@@ -1,15 +1,4 @@
 post_install() {
-  echo "Setting up Simple Orca Plugin System for current user..."
-  if [[ -x /usr/share/SOPS/install-for-current-user.sh ]]; then
-    /usr/share/SOPS/install-for-current-user.sh
-  fi
-  echo "Done!"
-}
-
-post_upgrade() {
-  post_install
-}
-
-post_remove() {
-  echo "Simple Orca Plugin System removed."
+	echo "for activate the pluginsystem for the current user run the following as normal user"
+	echo "/usr/share/SOPS/install-for-current-user.sh"
 }

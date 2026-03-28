@@ -1,39 +1,24 @@
-# Maintainer: Boo15mario
-pkgname=wayclip
-pkgver=0.1.1
-pkgrel=1
-pkgdesc='Clipboard history manager for Wayland with daemon and GTK4 client'
-arch=('x86_64')
-url='https://github.com/destructatron/wayclip'
-license=('MIT')
-depends=('gtk4' 'wl-clipboard')
-makedepends=('rust' 'cargo')
-source=("${pkgname}-${pkgver}.tar.gz::${url}/archive/refs/heads/main.tar.gz")
-sha256sums=('SKIP')
+# Maintainer: Marco Rubin <marco.rubin@protonmail.com>
+# Contributor: <deleted-account>
 
-prepare() {
-  cd "${srcdir}"
-  # The GitHub archive extracts to wayclip-main, rename to expected name
-  mv wayclip-main "${pkgname}-${pkgver}"
-  cd "${pkgname}-${pkgver}"
-  # Remove 'bundled' feature from rusqlite to use system sqlite3
-  sed -i 's/features = \["bundled", "blob"\]/features = ["blob"]/' Cargo.toml
-  # Build deps separately to avoid makepkg linking issues
-  cargo fetch --locked --target "$(rustc -vV | sed -n 's/host: //p')" 2>/dev/null || \
-  cargo fetch --target "$(rustc -vV | sed -n 's/host: //p')"
-}
+pkgname=wayclip
+pkgver=0.5
+pkgrel=1
+pkgdesc="Wayland clipboard utility"
+arch=('x86_64')
+url="https://git.sr.ht/~noocsharp/wayclip"
+license=('ISC')
+depends=('wayland')
+source=("$pkgname-$pkgver.tar.gz::https://git.sr.ht/~noocsharp/wayclip/archive/$pkgver.tar.gz")
+b2sums=('a6cf31c3aaf8e7055088fef771d94248d54549ddfafe60a4dfefb5d88879a61c1571ef448719359b35b77b49e583db98545baf407b94cf1fb8b02229fd2b7366')
 
 build() {
-  cd "${pkgname}-${pkgver}"
-  # Use system sqlite3 via pkg-config
-  unset RUSTFLAGS
-  cargo build --release --workspace
+	cd $pkgname-$pkgver
+	make
 }
 
 package() {
-  cd "${pkgname}-${pkgver}"
-  install -Dm755 target/release/wayclip "${pkgdir}/usr/bin/wayclip"
-  install -Dm755 target/release/wayclip-daemon "${pkgdir}/usr/bin/wayclip-daemon"
-  install -Dm644 LICENSE "${pkgdir}/usr/share/licenses/${pkgname}/LICENSE"
-  install -Dm644 README.md "${pkgdir}/usr/share/doc/${pkgname}/README.md"
+	cd $pkgname-$pkgver
+	make DESTDIR="$pkgdir" PREFIX=/usr install
+	install -Dm644 LICENSE "$pkgdir/usr/share/licenses/$pkgname/LICENSE"
 }
