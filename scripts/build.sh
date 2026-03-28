@@ -215,7 +215,7 @@ start_sudo_keepalive() {
   command -v sudo >/dev/null 2>&1 || die "sudo is required for local dependency installs"
 
   echo "Authenticating sudo for local package installs..."
-  sudo -v
+  sudo -n true
 
   (
     while true; do
