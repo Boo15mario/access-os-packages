@@ -1,0 +1,42 @@
+# Maintainer: Boo_mario <boo15mario.com>
+pkgname=procwatch
+pkgver=0.1.0
+pkgrel=1
+pkgdesc="Accessible GTK4 system monitor for Linux, designed for screen reader users"
+arch=('x86_64')
+url="https://github.com/boo15mario/procwatch"
+license=('MIT')
+depends=('gtk4' 'libadwaita')
+makedepends=('rust' 'cargo' 'gtk4' 'libadwaita' 'gobject-introspection')
+optdepends=('speech-dispatcher: for screen reader announcements'
+            'orc: for runtime codec compilation')
+source=("$pkgname-$pkgver.tar.gz::https://github.com/boo15mario/$pkgname/archive/refs/tags/v$pkgver.tar.gz")
+sha256sums=('8e2904eb78c720d2abe8d100ebf84d4a4ddf5b7705981135a807dee1c022b117')
+
+prepare() {
+    cd "$pkgname-$pkgver"
+    cargo fetch --locked --target "$(rustc -vV | sed -n 's/host: //p')"
+}
+
+build() {
+    cd "$pkgname-$pkgver"
+    export RUSTUP_TOOLCHAIN=stable
+    cargo build --release --frozen --all-features
+}
+
+check() {
+    cd "$pkgname-$pkgver"
+    cargo test --release --frozen
+}
+
+package() {
+    cd "$pkgname-$pkgver"
+    install -Dm755 target/release/procwatch "$pkgdir/usr/bin/procwatch"
+    install -Dm644 data/com.github.harley.procwatch.desktop \
+        "$pkgdir/usr/share/applications/com.github.harley.procwatch.desktop"
+    install -Dm644 data/icons/hicolor/scalable/apps/com.github.harley.procwatch.svg \
+        "$pkgdir/usr/share/icons/hicolor/scalable/apps/com.github.harley.procwatch.svg"
+    install -Dm644 data/com.github.harley.procwatch.gschema.xml \
+        "$pkgdir/usr/share/glib-2.0/schemas/com.github.harley.procwatch.gschema.xml"
+    install -Dm644 LICENSE "$pkgdir/usr/share/licenses/$pkgname/LICENSE"
+}

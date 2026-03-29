@@ -1,0 +1,48 @@
+# Maintainer: Boo_mario <boo15mario.com>
+pkgname=gtkmud
+pkgver=0.1.0
+pkgrel=1
+pkgdesc="Accessible GTK4 MUD client with scripting support and screen reader integration"
+arch=('any')
+url="https://github.com/boo15mario/gtkmud"
+license=('MIT')
+depends=('python>=3.11' 'python-gobject' 'python-lark' 'python-aiohttp' 'python-tomli-w')
+makedepends=('python-build' 'python-installer' 'python-wheel')
+optdepends=('speech-dispatcher: for screen reader announcements'
+            'alsa-lib: for audio support'
+            'gst-plugins-good: for audio playback')
+source=("$pkgname-$pkgver.tar.gz::https://github.com/boo15mario/$pkgname/archive/refs/tags/v$pkgver.tar.gz")
+sha256sums=('67e9b36bc21cac5e4f5ac7e33520506287dfc5ad5637af4693021ebd201c5a48')
+
+build() {
+    cd "$pkgname-$pkgver"
+    python -m build --wheel --no-isolation
+}
+
+package() {
+    cd "$pkgname-$pkgver"
+    python -m installer --destdir="$pkgdir" dist/*.whl
+    # Create MIT license file since none exists in source
+    mkdir -p "$pkgdir/usr/share/licenses/$pkgname"
+    cat > "$pkgdir/usr/share/licenses/$pkgname/LICENSE" << 'LICENSEEOF'
+MIT License
+
+Permission is hereby granted, free of charge, to any person obtaining a copy
+of this software and associated documentation files (the "Software"), to deal
+in the Software without restriction, including without limitation the rights
+to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+copies of the Software, and to permit persons to whom the Software is
+furnished to do so, subject to the following conditions:
+
+The above copyright notice and this permission notice shall be included in all
+copies or substantial portions of the Software.
+
+THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+SOFTWARE.
+LICENSEEOF
+}
