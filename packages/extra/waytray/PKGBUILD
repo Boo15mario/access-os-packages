@@ -4,13 +4,13 @@ pkgver=1.0.1
 pkgrel=1
 pkgdesc="Wayland system tray with daemon/client architecture"
 arch=('aarch64' 'x86_64')
-url="https://github.com/destructatron/waytray"
+url="https://github.com/boo15mario/waytray"
 license=('MIT')
 depends=('gtk4' 'gstreamer' 'dbus')
 makedepends=('rust' 'cargo')
 optdepends=('pipewire-pulse: for audio volume control module'
             'power-profiles-daemon: for power profile switching')
-source=("$pkgname-$pkgver.tar.gz::https://github.com/destructatron/waytray/archive/refs/tags/v$pkgver.tar.gz")
+source=("$pkgname-$pkgver.tar.gz::https://github.com/boo15mario/waytray/archive/refs/tags/v$pkgver.tar.gz")
 sha256sums=('5a9e2652cb0ec252305c55087212500193466b94a1701710e751937b63b87223')
 
 prepare() {
@@ -24,6 +24,8 @@ build() {
     cd "$pkgname-$pkgver"
     export RUSTUP_TOOLCHAIN=stable
     export CARGO_TARGET_DIR=target
+    # Force gcc linker to avoid lld + ring 0.17 asm incompatibility
+    export CARGO_TARGET_X86_64_UNKNOWN_LINUX_GNU_LINKER=gcc
     cargo build --release --frozen --all-features
 }
 
