@@ -19,3 +19,13 @@
 
 # AUR mirror (git-ignored, synced locally)
 /aur-mirror/
+
+# AUR package build artifacts
+packages/extra/*/src/
+packages/extra/*/pkg/
+packages/extra/*/*.pkg.tar.zst
+packages/extra/*/*.tar.gz
+packages/core/*/src/
+packages/core/*/pkg/
+packages/core/*/*.pkg.tar.zst
+packages/core/*/*.tar.gz
