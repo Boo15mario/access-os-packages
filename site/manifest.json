@@ -79,7 +79,8 @@
         "wine-stable-debug": "10.0-2",
         "zfs-dkms": "2.4.1-1",
         "zfs-utils": "2.4.1-1",
-        "zfs-utils-debug": "2.4.1-1"
+        "zfs-utils-debug": "2.4.1-1",
+        "waytray": "1.0.1-2"
       }
     }
   },
